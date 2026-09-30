@@ -1,0 +1,288 @@
+// StreamHub - Prisma Schema
+// Este archivo define la estructura de la base de datos para producción
+// En la Fase 1 se utiliza localStorage como mock, pero este schema
+// representa la arquitectura real de PostgreSQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// USUARIOS
+// ==========================================
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MODERATOR
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+model User {
+  id            String     @id @default(uuid())
+  username      String     @unique
+  usernameLower String     @unique // Normalizado para búsquedas case-insensitive
+  email         String     @unique
+  emailLower    String     @unique
+  passwordHash  String
+  displayName   String
+  bio           String     @default("")
+  avatarUrl     String     @default("")
+  bannerUrl     String     @default("")
+  role          UserRole   @default(USER)
+  status        UserStatus @default(ACTIVE)
+  emailVerified Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  lastLoginAt   DateTime   @default(now())
+
+  // Relaciones
+  channel         Channel?
+  follows         Follow[]         @relation("Following")
+  followedBy      Follow[]         @relation("Followers")
+  sessions        Session[]
+  auditLogs       AuditLog[]       @relation("Actor")
+  passwordResets  PasswordResetToken[]
+  verificationTokens VerificationToken[]
+
+  @@index([usernameLower])
+  @@index([emailLower])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+// ==========================================
+// CANALES
+// ==========================================
+
+model Channel {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  slug        String   @unique
+  title       String   @default("")
+  description String   @default("")
+  categoryId  String?
+  avatarUrl   String   @default("")
+  bannerUrl   String   @default("")
+  isLive      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category   Category?  @relation(fields: [categoryId], references: [id])
+  streamKey  StreamKey?
+  stream     Stream?
+  sessions   StreamSession[]
+
+  @@index([slug])
+  @@index([isLive])
+  @@map("channels")
+}
+
+// ==========================================
+// SEGUIDORES
+// ==========================================
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+// ==========================================
+// CATEGORÍAS
+// ==========================================
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
+  description String    @default("")
+  imageUrl    String    @default("")
+  createdAt   DateTime  @default(now())
+
+  channels Channel[]
+
+  @@map("categories")
+}
+
+// ==========================================
+// SESIONES
+// ==========================================
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ==========================================
+// TOKENS DE RECUPERACIÓN
+// ==========================================
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   // Hash del token, nunca en texto plano
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
+}
+
+// ==========================================
+// TOKENS DE VERIFICACIÓN
+// ==========================================
+
+model VerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@map("verification_tokens")
+}
+
+// ==========================================
+// AUDIT LOG
+// ==========================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String
+  targetType String
+  targetId   String
+  details    String   @default("")
+  ipAddress  String   @default("")
+  createdAt  DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ==========================================
+// STREAMING (FASE 2)
+// ==========================================
+
+enum StreamStatus {
+  OFFLINE
+  STARTING
+  LIVE
+  ENDING
+  ERROR
+}
+
+model StreamKey {
+  id        String   @id @default(uuid())
+  channelId String   @unique
+  keyHash   String   // Hash de la stream key, nunca en texto plano
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@map("stream_keys")
+}
+
+model Stream {
+  id              String       @id @default(uuid())
+  channelId       String       @unique
+  title           String       @default("")
+  categoryId      String?
+  tags            String[]     @default([])
+  thumbnailUrl    String       @default("")
+  status          StreamStatus @default(OFFLINE)
+  streamKeyId     String
+  startedAt       DateTime?
+  endedAt         DateTime?
+  lastHeartbeatAt DateTime?
+  viewerCount     Int          @default(0)
+  peakViewerCount Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  channel  Channel        @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sessions StreamSession[]
+
+  @@index([status])
+  @@index([startedAt])
+  @@map("streams")
+}
+
+model StreamSession {
+  id            String       @id @default(uuid())
+  streamId      String
+  startedAt     DateTime     @default(now())
+  endedAt       DateTime?
+  lastHeartbeatAt DateTime   @default(now())
+  sourceIp      String       @default("")
+  ingestServer  String       @default("")
+  status        StreamStatus @default(STARTING)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  stream Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@index([streamId])
+  @@index([startedAt])
+  @@map("stream_sessions")
+}
+
+// ==========================================
+// PREPARADO PARA FASE 3
+// ==========================================
+
+// model Video {
+//   id          String   @id @default(uuid())
+//   channelId   String
+//   title       String
+//   description String   @default("")
+//   duration    Int      @default(0)
+//   views       Int      @default(0)
+//   publishedAt DateTime @default(now())
+//   channel     Channel  @relation(fields: [channelId], references: [id])
+// }

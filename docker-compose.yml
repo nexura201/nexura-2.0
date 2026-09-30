@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "5173:5173"
+    environment:
+      - DATABASE_URL=postgresql://streamhub:streamhub@db:5432/streamhub
+      - AUTH_SECRET=dev-secret-change-in-production-min-32-chars
+      - APP_URL=http://localhost:5173
+      - NODE_ENV=development
+      - VITE_RTMP_SERVER_URL=rtmp://media-server:1935/live
+      - VITE_HLS_BASE_URL=http://localhost:8888
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: streamhub
+      POSTGRES_PASSWORD: streamhub
+      POSTGRES_DB: streamhub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  # MediaMTX - Media Server for RTMP/HLS
+  # Docs: https://github.com/bluenviron/mediamtx
+  media-server:
+    image: bluenviron/mediamtx:latest
+    ports:
+      # RTMP ingest
+      - "1935:1935"
+      # HLS playback
+      - "8888:8888"
+      # API (internal only)
+      - "9997:9997"
+      # Metrics
+      - "9998:9998"
+    environment:
+      # RTMP Configuration
+      - MTX_PROTOCOLS=tcp
+      - MTX_RTMPEncryption=no
+      # HLS Configuration
+      - MTX_HLS=yes
+      - MTX_HLS_VARIANT=lowlatency
+      - MTX_HLS_SEGMENT_COUNT=8
+      - MTX_HLS_SEGMENT_DURATION=1s
+      - MTX_HLS_PART_DURATION=200ms
+      # API Configuration (for stream detection)
+      - MTX_API=yes
+      - MTX_API_ADDRESS=0.0.0.0:9997
+      # Webhook callbacks for stream events
+      - MTX_RUNONREQUEST=
+      - MTX_RUNONREAD=
+      - MTX_RUNONUNREAD=
+      - MTX_RUNONSTOP=
+    volumes:
+      - mediamtx_data:/hls
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  mediamtx_data:
