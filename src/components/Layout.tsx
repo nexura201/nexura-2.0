@@ -43,9 +43,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col w-60 bg-gray-900 border-r border-gray-800 fixed h-full z-40">
         <div className="p-4 border-b border-gray-800">
-          <Link to="/" className="flex items-center gap-2">
-            <img src="/brand/nexura-icon.svg" alt="NEXURA" className="w-8 h-8" />
-            <span className="font-bold text-lg text-white">NEXURA</span>
+          <Link to="/" className="block">
+            {/* Logo oficial: el PNG ya contiene la palabra NEXURA (no agregar texto duplicado) */}
+            <img src="/brand/nexura-4nuevo-logo.png" alt="NEXURA" className="h-9 w-auto max-w-[176px]" />
           </Link>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -97,9 +97,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="absolute inset-0 bg-black/60" onClick={() => setSidebarOpen(false)} />
           <aside className="relative w-64 h-full bg-gray-900 flex flex-col animate-slide-in">
             <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-              <Link to="/" className="flex items-center gap-2" onClick={() => setSidebarOpen(false)}>
-                <img src="/brand/nexura-icon.svg" alt="NEXURA" className="w-8 h-8" />
-                <span className="font-bold text-lg text-white">NEXURA</span>
+              <Link to="/" className="block" onClick={() => setSidebarOpen(false)}>
+                {/* Logo oficial: el PNG ya contiene la palabra NEXURA (no agregar texto duplicado) */}
+                <img src="/brand/nexura-4nuevo-logo.png" alt="NEXURA" className="h-9 w-auto max-w-[200px]" />
               </Link>
               <button onClick={() => setSidebarOpen(false)} className="text-gray-400">
                 <X className="w-5 h-5" />
@@ -160,9 +160,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 <Menu className="w-6 h-6" />
               </button>
-              <Link to="/" className="lg:hidden flex items-center gap-2">
-                <img src="/brand/nexura-icon.svg" alt="NEXURA" className="w-7 h-7" />
-                <span className="font-bold text-white hidden sm:block">NEXURA</span>
+              <Link to="/" className="lg:hidden block">
+                {/* Logo oficial: el PNG ya contiene la palabra NEXURA (no agregar texto duplicado) */}
+                <img src="/brand/nexura-4nuevo-logo.png" alt="NEXURA" className="h-8 w-auto max-w-[150px]" />
               </Link>
               <div className="hidden sm:flex items-center bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 w-64 focus-within:border-purple-500">
                 <Search className="w-4 h-4 text-gray-500 mr-2" />
