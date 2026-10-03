@@ -25,10 +25,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const icons = {
-    success: <CheckCircle className="w-5 h-5 text-green-500" />,
-    error: <AlertCircle className="w-5 h-5 text-red-500" />,
-    warning: <AlertTriangle className="w-5 h-5 text-yellow-500" />,
-    info: <Info className="w-5 h-5 text-blue-500" />,
+    success: <CheckCircle className="w-5 h-5 text-success" />,
+    error: <AlertCircle className="w-5 h-5 text-error" />,
+    warning: <AlertTriangle className="w-5 h-5 text-warning" />,
+    info: <Info className="w-5 h-5 text-primary" />,
   };
 
   return (
@@ -38,11 +38,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         {toasts.map(toast => (
           <div
             key={toast.id}
-            className="animate-fade-in flex items-center gap-3 bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 shadow-xl"
+            className="animate-fade-in flex items-center gap-3 bg-surface border border-border rounded-lg px-4 py-3 shadow-xl"
           >
             {icons[toast.type]}
             <p className="text-sm text-white flex-1">{toast.message}</p>
-            <button onClick={() => removeToast(toast.id)} className="text-gray-400 hover:text-white">
+            <button onClick={() => removeToast(toast.id)} className="text-text-secondary hover:text-white">
               <X className="w-4 h-4" />
             </button>
           </div>

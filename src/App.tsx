@@ -31,16 +31,16 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white p-4">
+        <div className="min-h-screen flex items-center justify-center bg-surface-deep text-white p-4">
           <div className="max-w-md text-center">
-            <h1 className="text-4xl font-bold mb-4 text-red-500">¡Oops!</h1>
+            <h1 className="text-4xl font-bold mb-4 text-error">¡Oops!</h1>
             <p className="text-xl mb-4">Algo salió mal</p>
-            <p className="text-gray-400 mb-6">
+            <p className="text-text-secondary mb-6">
               {this.state.error?.message || 'Error inesperado'}
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+              className="bg-primary hover:bg-primary-hover text-white px-6 py-3 rounded-lg font-semibold transition-colors"
             >
               Recargar página
             </button>
@@ -81,6 +81,8 @@ import { CookiesPage } from './pages/CookiesPage';
 import { CommunityGuidelinesPage } from './pages/CommunityGuidelinesPage';
 import { ContentPolicyPage } from './pages/ContentPolicyPage';
 import { SupportPage } from './pages/SupportPage';
+import { MyTicketsPage, TicketDetailPage } from './pages/SupportTickets';
+import { SupportAdminPage } from './pages/SupportAdmin';
 import { StatusPage } from './pages/StatusPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
@@ -93,8 +95,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="w-8 h-8 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-surface-deep">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -126,6 +128,8 @@ function AppRoutes() {
       <Route path="/community-guidelines" element={<Layout><CommunityGuidelinesPage /></Layout>} />
       <Route path="/content-policy" element={<Layout><ContentPolicyPage /></Layout>} />
       <Route path="/support" element={<Layout><SupportPage /></Layout>} />
+      <Route path="/support/tickets" element={<Layout><MyTicketsPage /></Layout>} />
+      <Route path="/support/tickets/:id" element={<Layout><TicketDetailPage /></Layout>} />
       <Route path="/status" element={<Layout><StatusPage /></Layout>} />
       
       {/* Rutas protegidas */}
@@ -147,6 +151,7 @@ function AppRoutes() {
       <Route path="/admin" element={<ProtectedRoute><Layout><AdminPage /></Layout></ProtectedRoute>} />
       <Route path="/admin/security" element={<ProtectedRoute><Layout><SecurityDashboardPage /></Layout></ProtectedRoute>} />
       <Route path="/owner" element={<ProtectedRoute><Layout><OwnerPage /></Layout></ProtectedRoute>} />
+      <Route path="/owner/support" element={<ProtectedRoute><Layout><SupportAdminPage /></Layout></ProtectedRoute>} />
       <Route path="/owner/infrastructure" element={<ProtectedRoute><Layout><InfrastructureDashboardPage /></Layout></ProtectedRoute>} />
       <Route path="/owner/infrastructure/queues" element={<ProtectedRoute><Layout><QueueDashboardPage /></Layout></ProtectedRoute>} />
       

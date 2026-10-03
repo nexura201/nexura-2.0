@@ -7,7 +7,7 @@ import type { User } from '../types';
 import {
   Users, Shield, Activity, Radio, Heart, BarChart3,
   Search, Eye, Ban, CheckCircle, AlertTriangle,
-  ChevronRight, Clock, Database, Server, HardDrive
+  ChevronRight, Clock, Database, Server, HardDrive, LifeBuoy
 } from 'lucide-react';
 
 export function AdminPage() {
@@ -280,15 +280,24 @@ export function OwnerPage() {
       <div className="bg-bg-card border border-border rounded-xl overflow-hidden mb-8">
         <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">Administración de usuarios</h2>
-          <div className="flex items-center bg-bg-input border border-border rounded-lg px-3 py-1.5 w-full sm:w-64">
-            <Search className="w-4 h-4 text-text-muted mr-2" />
-            <input
-              type="text"
-              placeholder="Buscar usuario..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="bg-transparent text-sm text-white placeholder-text-muted outline-none w-full"
-            />
+          <div className="flex items-center gap-3">
+            {/* Acceso al módulo de Soporte Técnico del Control Center */}
+            <Link
+              to="/owner/support"
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-medium transition-colors whitespace-nowrap"
+            >
+              <LifeBuoy className="w-3.5 h-3.5" /> Soporte Técnico
+            </Link>
+            <div className="flex items-center bg-bg-input border border-border rounded-lg px-3 py-1.5 w-full sm:w-64">
+              <Search className="w-4 h-4 text-text-muted mr-2" />
+              <input
+                type="text"
+                placeholder="Buscar usuario..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="bg-transparent text-sm text-white placeholder-text-muted outline-none w-full"
+              />
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">

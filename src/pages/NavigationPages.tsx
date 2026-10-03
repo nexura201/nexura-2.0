@@ -192,12 +192,12 @@ export function FollowingPage() {
 
 export function CategoriesPage() {
   const categories = [
-    { name: 'Gaming', icon: Gamepad2, channels: 0, color: 'from-purple-500/20 to-blue-500/20' },
-    { name: 'Programación', icon: Code, channels: 0, color: 'from-green-500/20 to-teal-500/20' },
-    { name: 'Música', icon: Music, channels: 0, color: 'from-pink-500/20 to-rose-500/20' },
-    { name: 'Arte', icon: Palette, channels: 0, color: 'from-orange-500/20 to-yellow-500/20' },
-    { name: 'Educación', icon: BookOpen, channels: 0, color: 'from-blue-500/20 to-indigo-500/20' },
-    { name: 'Deportes', icon: Dumbbell, channels: 0, color: 'from-red-500/20 to-orange-500/20' },
+    { name: 'Gaming', icon: Gamepad2, channels: 0, color: 'from-primary-hover/20 to-primary/20' },
+    { name: 'Programación', icon: Code, channels: 0, color: 'from-success/20 to-accent/20' },
+    { name: 'Música', icon: Music, channels: 0, color: 'from-pink-500/20 to-error/20' },
+    { name: 'Arte', icon: Palette, channels: 0, color: 'from-orange-500/20 to-warning/20' },
+    { name: 'Educación', icon: BookOpen, channels: 0, color: 'from-primary/20 to-primary/20' },
+    { name: 'Deportes', icon: Dumbbell, channels: 0, color: 'from-error/20 to-orange-500/20' },
   ];
 
   return (

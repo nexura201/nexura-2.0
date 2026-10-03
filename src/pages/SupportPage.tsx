@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, Mail, Book, HelpCircle, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Mail, Book, HelpCircle, AlertTriangle, CheckCircle, LifeBuoy } from 'lucide-react';
 
 export function SupportPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -176,6 +176,28 @@ export function SupportPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Tickets de soporte */}
+      <div className="bg-bg-card border border-border rounded-xl p-8 mb-12">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+            <LifeBuoy className="w-6 h-6 text-primary" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-white mb-2">Sistema de tickets</h2>
+            <p className="text-text-secondary mb-5">
+              Creá un ticket con asunto, categoría y prioridad, adjuntá capturas, seguí el historial completo
+              y recibí una notificación cuando el equipo de soporte responda. Cada ticket tiene un identificador único (NX-000001).
+            </p>
+            <Link
+              to="/support/tickets"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary-hover text-white rounded-lg transition-colors font-medium"
+            >
+              Ver mis tickets / Crear uno nuevo
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* Report Issue */}
