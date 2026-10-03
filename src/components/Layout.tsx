@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   Home, Compass, Grid3X3, Heart, Library, LayoutDashboard,
   Settings, LogOut, Menu, X, Search, Bell, User, ChevronDown,
-  Shield, Radio
+  Shield, Radio, LifeBuoy
 } from 'lucide-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -29,6 +29,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       { icon: Library, label: 'Biblioteca', path: '/library' },
       { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     ] : []),
+    { icon: LifeBuoy, label: 'Centro de Soporte', path: '/support' },
   ];
 
   const bottomItems = user ? [

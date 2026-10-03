@@ -81,6 +81,8 @@ import { CookiesPage } from './pages/CookiesPage';
 import { CommunityGuidelinesPage } from './pages/CommunityGuidelinesPage';
 import { ContentPolicyPage } from './pages/ContentPolicyPage';
 import { SupportPage } from './pages/SupportPage';
+import { MyTicketsPage, TicketDetailPage } from './pages/SupportTickets';
+import { SupportAdminPage } from './pages/SupportAdmin';
 import { StatusPage } from './pages/StatusPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
@@ -126,6 +128,8 @@ function AppRoutes() {
       <Route path="/community-guidelines" element={<Layout><CommunityGuidelinesPage /></Layout>} />
       <Route path="/content-policy" element={<Layout><ContentPolicyPage /></Layout>} />
       <Route path="/support" element={<Layout><SupportPage /></Layout>} />
+      <Route path="/support/tickets" element={<Layout><MyTicketsPage /></Layout>} />
+      <Route path="/support/tickets/:id" element={<Layout><TicketDetailPage /></Layout>} />
       <Route path="/status" element={<Layout><StatusPage /></Layout>} />
       
       {/* Rutas protegidas */}
@@ -147,6 +151,7 @@ function AppRoutes() {
       <Route path="/admin" element={<ProtectedRoute><Layout><AdminPage /></Layout></ProtectedRoute>} />
       <Route path="/admin/security" element={<ProtectedRoute><Layout><SecurityDashboardPage /></Layout></ProtectedRoute>} />
       <Route path="/owner" element={<ProtectedRoute><Layout><OwnerPage /></Layout></ProtectedRoute>} />
+      <Route path="/owner/support" element={<ProtectedRoute><Layout><SupportAdminPage /></Layout></ProtectedRoute>} />
       <Route path="/owner/infrastructure" element={<ProtectedRoute><Layout><InfrastructureDashboardPage /></Layout></ProtectedRoute>} />
       <Route path="/owner/infrastructure/queues" element={<ProtectedRoute><Layout><QueueDashboardPage /></Layout></ProtectedRoute>} />
       
