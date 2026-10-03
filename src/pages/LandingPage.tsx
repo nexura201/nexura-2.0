@@ -161,9 +161,9 @@ export function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-gray-800 py-8 px-4">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <img src="/brand/nexura-icon.svg" alt="NEXURA" className="w-6 h-6" />
-            <span className="font-semibold text-white">NEXURA</span>
+          <div className="flex items-center">
+            {/* Logo oficial: el PNG ya contiene la palabra NEXURA (no agregar texto duplicado) */}
+            <img src="/brand/nexura-4nuevo-logo-original.png" alt="NEXURA" className="h-8 w-auto max-w-[150px]" />
           </div>
           <p className="text-sm text-gray-500">© 2024 NEXURA. Todos los derechos reservados.</p>
         </div>

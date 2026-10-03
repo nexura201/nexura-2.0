@@ -39,9 +39,9 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            <img src="/brand/nexura-icon.svg" alt="NEXURA" className="w-10 h-10" />
-            <span className="font-bold text-2xl text-white">NEXURA</span>
+          <Link to="/" className="inline-block mb-6">
+            {/* Logo oficial: el PNG ya contiene la palabra NEXURA (no agregar texto duplicado) */}
+            <img src="/brand/nexura-4nuevo-logo-original.png" alt="NEXURA" className="h-12 w-auto mx-auto max-w-[240px]" />
           </Link>
           <h1 className="text-2xl font-bold text-white">Iniciar sesión</h1>
           <p className="text-gray-400 mt-2">Bienvenido de vuelta a NEXURA</p>
@@ -183,9 +183,9 @@ export function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            <img src="/brand/nexura-icon.svg" alt="NEXURA" className="w-10 h-10" />
-            <span className="font-bold text-2xl text-white">NEXURA</span>
+          <Link to="/" className="inline-block mb-6">
+            {/* Logo oficial: el PNG ya contiene la palabra NEXURA (no agregar texto duplicado) */}
+            <img src="/brand/nexura-4nuevo-logo-original.png" alt="NEXURA" className="h-12 w-auto mx-auto max-w-[240px]" />
           </Link>
           <h1 className="text-2xl font-bold text-white">Crear cuenta</h1>
           <p className="text-gray-400 mt-2">Únete a NEXURA gratis</p>
