@@ -31,16 +31,16 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white p-4">
+        <div className="min-h-screen flex items-center justify-center bg-surface-deep text-white p-4">
           <div className="max-w-md text-center">
-            <h1 className="text-4xl font-bold mb-4 text-red-500">¡Oops!</h1>
+            <h1 className="text-4xl font-bold mb-4 text-error">¡Oops!</h1>
             <p className="text-xl mb-4">Algo salió mal</p>
-            <p className="text-gray-400 mb-6">
+            <p className="text-text-secondary mb-6">
               {this.state.error?.message || 'Error inesperado'}
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+              className="bg-primary hover:bg-primary-hover text-white px-6 py-3 rounded-lg font-semibold transition-colors"
             >
               Recargar página
             </button>
@@ -93,8 +93,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="w-8 h-8 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-surface-deep">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }

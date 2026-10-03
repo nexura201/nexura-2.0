@@ -44,43 +44,43 @@ export function LoginPage() {
             <img src="/brand/nexura-1nuevo-logo-original.png" alt="NEXURA" className="h-12 w-auto mx-auto max-w-[240px]" />
           </Link>
           <h1 className="text-2xl font-bold text-white">Iniciar sesión</h1>
-          <p className="text-gray-400 mt-2">Bienvenido de vuelta a NEXURA</p>
+          <p className="text-text-secondary mt-2">Bienvenido de vuelta a NEXURA</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-surface border border-surface-2 rounded-xl p-6 space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg px-4 py-3">
+            <div className="bg-error/10 border border-error/20 text-error text-sm rounded-lg px-4 py-3">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Email o username</label>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">Email o username</label>
             <input
               type="text"
               value={login}
               onChange={e => setLogin(e.target.value)}
               placeholder="tu@email.com o username"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none focus:border-purple-500 transition-colors"
+              className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-white placeholder-text-secondary outline-none focus:border-primary-hover transition-colors"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Contraseña</label>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">Contraseña</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none focus:border-purple-500 transition-colors pr-10"
+                className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-white placeholder-text-secondary outline-none focus:border-primary-hover transition-colors pr-10"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-white"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -91,11 +91,11 @@ export function LoginPage() {
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-purple-600 focus:ring-purple-500"
+                className="w-4 h-4 rounded border-border bg-surface-2 text-primary focus:ring-primary-hover"
               />
-              <span className="text-sm text-gray-400">Recordarme</span>
+              <span className="text-sm text-text-secondary">Recordarme</span>
             </label>
-            <Link to="/forgot-password" className="text-sm text-purple-400 hover:text-purple-300">
+            <Link to="/forgot-password" className="text-sm text-primary-hover hover:text-accent-strong">
               ¿Olvidaste tu contraseña?
             </Link>
           </div>
@@ -103,16 +103,16 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 text-white py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             Iniciar sesión
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-400 mt-6">
+        <p className="text-center text-sm text-text-secondary mt-6">
           ¿No tienes cuenta?{' '}
-          <Link to="/register" className="text-purple-400 hover:text-purple-300 font-medium">
+          <Link to="/register" className="text-primary-hover hover:text-accent-strong font-medium">
             Regístrate gratis
           </Link>
         </p>
@@ -188,73 +188,73 @@ export function RegisterPage() {
             <img src="/brand/nexura-1nuevo-logo-original.png" alt="NEXURA" className="h-12 w-auto mx-auto max-w-[240px]" />
           </Link>
           <h1 className="text-2xl font-bold text-white">Crear cuenta</h1>
-          <p className="text-gray-400 mt-2">Únete a NEXURA gratis</p>
+          <p className="text-text-secondary mt-2">Únete a NEXURA gratis</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-surface border border-surface-2 rounded-xl p-6 space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg px-4 py-3">
+            <div className="bg-error/10 border border-error/20 text-error text-sm rounded-lg px-4 py-3">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Username</label>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">Username</label>
             <input
               type="text"
               value={formData.username}
               onChange={e => handleChange('username', e.target.value)}
               placeholder="tu_nombre_usuario"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none focus:border-purple-500 transition-colors"
+              className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-white placeholder-text-secondary outline-none focus:border-primary-hover transition-colors"
               required
             />
-            <p className="text-xs text-gray-500 mt-1">3-24 caracteres. Letras, números y _</p>
+            <p className="text-xs text-text-secondary mt-1">3-24 caracteres. Letras, números y _</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Nombre visible</label>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">Nombre visible</label>
             <input
               type="text"
               value={formData.displayName}
               onChange={e => handleChange('displayName', e.target.value)}
               placeholder="Tu nombre"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none focus:border-purple-500 transition-colors"
+              className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-white placeholder-text-secondary outline-none focus:border-primary-hover transition-colors"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Email</label>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">Email</label>
             <input
               type="email"
               value={formData.email}
               onChange={e => handleChange('email', e.target.value)}
               placeholder="tu@email.com"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none focus:border-purple-500 transition-colors"
+              className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-white placeholder-text-secondary outline-none focus:border-primary-hover transition-colors"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Contraseña</label>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">Contraseña</label>
             <input
               type="password"
               value={formData.password}
               onChange={e => handleChange('password', e.target.value)}
               placeholder="Mínimo 8 caracteres"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none focus:border-purple-500 transition-colors"
+              className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-white placeholder-text-secondary outline-none focus:border-primary-hover transition-colors"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Confirmar contraseña</label>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">Confirmar contraseña</label>
             <input
               type="password"
               value={formData.confirmPassword}
               onChange={e => handleChange('confirmPassword', e.target.value)}
               placeholder="Repite tu contraseña"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none focus:border-purple-500 transition-colors"
+              className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-white placeholder-text-secondary outline-none focus:border-primary-hover transition-colors"
               required
             />
           </div>
@@ -262,16 +262,16 @@ export function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 text-white py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             Crear cuenta
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-400 mt-6">
+        <p className="text-center text-sm text-text-secondary mt-6">
           ¿Ya tienes cuenta?{' '}
-          <Link to="/login" className="text-purple-400 hover:text-purple-300 font-medium">
+          <Link to="/login" className="text-primary-hover hover:text-accent-strong font-medium">
             Inicia sesión
           </Link>
         </p>

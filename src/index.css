@@ -1,1 +1,61 @@
 @import "tailwindcss";
+
+/* ============================================================
+   NEXURA 2.0 — Paleta oficial: AZUL MARINO + AZUL ELÉCTRICO
+   Tokens centralizados (Tailwind v4 @theme). No introducir
+   colores fuera de esta paleta salvo estados semánticos.
+   ============================================================ */
+@theme {
+  /* Fondos y superficies */
+  --color-bg: #07111F;           /* fondo principal */
+  --color-surface: #0D1B2A;      /* superficies / tarjetas */
+  --color-surface-2: #12263A;    /* superficie secundaria */
+  --color-surface-deep: #050D18; /* variante profunda del fondo */
+
+  /* Marca / acciones */
+  --color-primary: #1677FF;        /* azul principal NEXURA */
+  --color-accent: #2D8CFF;         /* azul de acciones */
+  --color-primary-hover: #3D9BFF;  /* hover / focus */
+
+  /* Texto */
+  --color-text-primary: #F5F9FF;
+  --color-text-secondary: #9FB2C8;
+
+  /* Bordes */
+  --color-border: #1B3550;
+
+  /* Estados semánticos */
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+}
+
+/* Alias retro-compatibles usados por componentes existentes */
+@theme inline {
+  --color-card: var(--color-surface);
+  --color-elevated: var(--color-surface-2);
+  --color-input: var(--color-surface-2);
+
+  --color-bg-base: var(--color-bg);
+  --color-bg-dark: var(--color-bg);
+  --color-bg-card: var(--color-surface);
+  --color-bg-elevated: var(--color-surface-2);
+  --color-bg-input: var(--color-surface-2);
+
+  --color-muted: var(--color-text-secondary);
+  --color-danger: var(--color-error);
+
+  --color-accent-strong: var(--color-primary-hover);
+  --color-primary-light: var(--color-text-primary);
+}
+
+/* Utilidades de texto que referencian los tokens de la paleta */
+@utility text-secondary { color: var(--color-text-secondary); }
+@utility text-primary-light { color: var(--color-text-primary); }
+
+/* Fondo global con la identidad navy de NEXURA */
+html,
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+}

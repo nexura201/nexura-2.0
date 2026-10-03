@@ -266,8 +266,8 @@ function createPlaceholderThumbnail(title: string): ArrayBuffer {
   if (ctx) {
     // Gradient background
     const gradient = ctx.createLinearGradient(0, 0, 320, 180);
-    gradient.addColorStop(0, '#8B5CF6');
-    gradient.addColorStop(1, '#C4B5FD');
+    gradient.addColorStop(0, '#1677FF');
+    gradient.addColorStop(1, '#3D9BFF');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 320, 180);
     
