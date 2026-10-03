@@ -23,7 +23,7 @@ export function VerifyEmailPage() {
       <div className="w-full max-w-md text-center">
         <Link to="/" className="inline-block mb-8">
           {/* Logo oficial: el PNG ya contiene la palabra NEXURA (no agregar texto duplicado) */}
-          <img src="/brand/nexura-4nuevo-logo-original.png" alt="NEXURA" className="h-12 w-auto mx-auto max-w-[240px]" />
+          <img src="/brand/nexura-1nuevo-logo-original.png" alt="NEXURA" className="h-12 w-auto mx-auto max-w-[240px]" />
         </Link>
 
         <div className="bg-bg-card border border-border rounded-xl p-8">

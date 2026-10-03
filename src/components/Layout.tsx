@@ -45,7 +45,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-4 border-b border-gray-800">
           <Link to="/" className="block">
             {/* Logo oficial: el PNG ya contiene la palabra NEXURA (no agregar texto duplicado) */}
-            <img src="/brand/nexura-4nuevo-logo-original.png" alt="NEXURA" className="h-9 w-auto max-w-[176px]" />
+            <img src="/brand/nexura-1nuevo-logo-original.png" alt="NEXURA" className="h-9 w-auto max-w-[176px]" />
           </Link>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -99,7 +99,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="p-4 border-b border-gray-800 flex items-center justify-between">
               <Link to="/" className="block" onClick={() => setSidebarOpen(false)}>
                 {/* Logo oficial: el PNG ya contiene la palabra NEXURA (no agregar texto duplicado) */}
-                <img src="/brand/nexura-4nuevo-logo-original.png" alt="NEXURA" className="h-9 w-auto max-w-[200px]" />
+                <img src="/brand/nexura-1nuevo-logo-original.png" alt="NEXURA" className="h-9 w-auto max-w-[200px]" />
               </Link>
               <button onClick={() => setSidebarOpen(false)} className="text-gray-400">
                 <X className="w-5 h-5" />
@@ -162,7 +162,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </button>
               <Link to="/" className="lg:hidden block">
                 {/* Logo oficial: el PNG ya contiene la palabra NEXURA (no agregar texto duplicado) */}
-                <img src="/brand/nexura-4nuevo-logo-original.png" alt="NEXURA" className="h-8 w-auto max-w-[150px]" />
+                <img src="/brand/nexura-1nuevo-logo-original.png" alt="NEXURA" className="h-8 w-auto max-w-[150px]" />
               </Link>
               <div className="hidden sm:flex items-center bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 w-64 focus-within:border-purple-500">
                 <Search className="w-4 h-4 text-gray-500 mr-2" />
