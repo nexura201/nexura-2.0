@@ -43,7 +43,7 @@ export function AdminPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-white">Panel de Administración</h1>
-          <p className="text-text-secondary text-sm">Gestiona la plataforma StreamHub</p>
+          <p className="text-text-secondary text-sm">Gestiona la plataforma NEXURA</p>
         </div>
       </div>
 
@@ -231,7 +231,7 @@ export function OwnerPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-white">Panel del Propietario</h1>
-          <p className="text-text-secondary text-sm">Control total de la plataforma StreamHub</p>
+          <p className="text-text-secondary text-sm">Control total de la plataforma NEXURA</p>
         </div>
       </div>
 

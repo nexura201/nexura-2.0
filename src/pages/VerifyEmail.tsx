@@ -40,7 +40,7 @@ export function VerifyEmailPage() {
               <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
               <h1 className="text-xl font-bold text-white mb-2">¡Email verificado!</h1>
               <p className="text-text-secondary mb-6">
-                Tu email ha sido verificado correctamente. Ya puedes disfrutar de todas las funciones de StreamHub.
+                Tu email ha sido verificado correctamente. Ya puedes disfrutar de todas las funciones de NEXURA.
               </p>
               <Link
                 to="/dashboard"

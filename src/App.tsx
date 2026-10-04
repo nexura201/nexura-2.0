@@ -56,6 +56,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 // Páginas
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage, RegisterPage } from './pages/AuthPages';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ProfilePage, ChannelPage } from './pages/ProfileChannel';
 import { DashboardPage } from './pages/DashboardPage';
 import { NotificationsPage } from './pages/NotificationsPage';
@@ -112,6 +113,7 @@ function AppRoutes() {
       <Route path="/" element={<Layout><LandingPage /></Layout>} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/explore" element={<Layout><ExplorePage /></Layout>} />
       <Route path="/categories" element={<Layout><CategoriesPage /></Layout>} />
       <Route path="/search" element={<Layout><SearchPage /></Layout>} />
