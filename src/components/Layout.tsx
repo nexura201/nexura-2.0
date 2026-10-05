@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { SupportFloatingButton } from './SupportFloatingButton';
 import {
   Home, Compass, Grid3X3, Heart, Library, LayoutDashboard,
   Settings, LogOut, Menu, X, Search, Bell, User, ChevronDown,
@@ -247,6 +248,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+
+      {/* Botón flotante de Soporte Técnico (reutiliza /support) */}
+      <SupportFloatingButton />
     </div>
   );
 }
