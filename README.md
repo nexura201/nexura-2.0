@@ -153,3 +153,5 @@ Configura redirecciones en tu servidor web (ver sección de hosting)
 ## 📄 Licencia
 
 Privado - Todos los derechos reservados
+
+NEXURA 2.0 — prueba de publicación GitHub
