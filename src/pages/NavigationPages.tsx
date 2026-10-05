@@ -6,7 +6,7 @@ import * as streaming from '../services/streaming';
 import {
   Compass, Grid3X3, Heart, Library, Play, Radio,
   Users, TrendingUp, Search, Gamepad2, Code, Music,
-  Palette, BookOpen, Dumbbell
+  Palette, BookOpen, Dumbbell, Sparkles
 } from 'lucide-react';
 
 export function ExplorePage() {
@@ -218,6 +218,13 @@ export function CategoriesPage() {
             <p className="text-sm text-text-muted">{cat.channels} canales activos</p>
           </div>
         ))}
+
+        {/* Tarjeta NEXURA IA — solo visual */}
+        <div className="bg-gradient-to-br from-primary/20 to-accent/20 border border-border rounded-xl p-6 hover:border-primary/30 transition-all cursor-pointer group">
+          <Sparkles className="w-10 h-10 text-white/80 mb-4 group-hover:scale-110 transition-transform" />
+          <h3 className="text-lg font-semibold text-white mb-1">NEXURA IA</h3>
+          <p className="text-sm text-text-muted">PRÓXIMAMENTE</p>
+        </div>
       </div>
     </div>
   );
