@@ -9,7 +9,7 @@ import { OwnerLayout, BackendNotice } from './OwnerLayout';
 import { AdminService, type DashboardStats, type RecentEvent } from '../../services/admin.service';
 import {
   Users, Radio, Film, Eye, UserPlus, AlertTriangle, LifeBuoy, BarChart3,
-  Activity, ShieldCheck, Video, TrendingUp, Clock,
+  Activity, ShieldCheck, Video, TrendingUp, Clock, CalendarDays, Wrench,
 } from 'lucide-react';
 
 export function OwnerDashboardPage() {
@@ -95,6 +95,58 @@ export function OwnerDashboardPage() {
       )}
 
       <div className="grid lg:grid-cols-3 gap-6">
+        {/* Estado de la plataforma */}
+        <div className="lg:col-span-3 grid sm:grid-cols-3 gap-4">
+          <div className="bg-bg-card border border-border rounded-xl p-4">
+            <h2 className="text-xs text-text-muted font-semibold uppercase tracking-wider mb-3 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-primary-light" /> Estado de la plataforma
+            </h2>
+            {(() => {
+              const m = AdminService.getMaintenanceConfig();
+              return (
+                <div className="space-y-2">
+                  <span className={`inline-flex items-center gap-1.5 text-sm font-bold px-3 py-1 rounded-full ${m.enabled ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'}`}>
+                    <span className={`w-2 h-2 rounded-full ${m.enabled ? 'bg-warning' : 'bg-success animate-pulse'}`} />
+                    {m.enabled ? 'Mantenimiento' : 'Activa'}
+                  </span>
+                  {m.enabled && m.message && <p className="text-xs text-text-secondary leading-relaxed">{m.message}</p>}
+                  <Link to="/owner/settings" className="block text-xs text-primary-light hover:text-white transition-colors">Administrar →</Link>
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className="bg-bg-card border border-border rounded-xl p-4">
+            <h2 className="text-xs text-text-muted font-semibold uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Radio className="w-4 h-4 text-primary-light" /> Estado del streaming
+            </h2>
+            <div className="space-y-2">
+              <p className="text-sm text-white">
+                Lives activos: <span className={stats && stats.activeLives ? 'text-success font-bold' : 'text-text-muted'}>{fmt(stats?.activeLives)}</span>
+              </p>
+              <p className="text-xs text-text-secondary">Espectadores en vivo: {fmt(stats?.liveViewers)}</p>
+              <Link to="/owner/infrastructure" className="block text-xs text-primary-light hover:text-white transition-colors">Infraestructura →</Link>
+            </div>
+          </div>
+
+          <div className="bg-bg-card border border-border rounded-xl p-4">
+            <h2 className="text-xs text-text-muted font-semibold uppercase tracking-wider mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-warning" /> Alertas administrativas
+            </h2>
+            <ul className="space-y-1.5 text-xs">
+              {stats && stats.openTickets > 0 && (
+                <li><Link to="/owner/support" className="flex items-center justify-between text-text-secondary hover:text-white"><span>Tickets de soporte abiertos</span><span className="text-warning font-bold">{fmt(stats.openTickets)}</span></Link></li>
+              )}
+              {stats && stats.pendingReports > 0 && (
+                <li><Link to="/moderation/reports" className="flex items-center justify-between text-text-secondary hover:text-white"><span>Reportes pendientes</span><span className="text-danger font-bold">{fmt(stats.pendingReports)}</span></Link></li>
+              )}
+              {!stats || (stats.openTickets === 0 && stats.pendingReports === 0) ? (
+                <li className="text-text-muted">Sin alertas activas.</li>
+              ) : null}
+            </ul>
+          </div>
+        </div>
+
         {/* Actividad reciente */}
         <div className="lg:col-span-2 bg-bg-card border border-border rounded-xl overflow-hidden">
           <div className="p-4 border-b border-border flex items-center justify-between">
@@ -146,6 +198,8 @@ export function OwnerDashboardPage() {
                 { to: '/owner/support', label: 'Soporte', icon: LifeBuoy },
                 { to: '/owner/settings', label: 'Configuración', icon: ShieldCheck },
                 { to: '/owner/activity', label: 'Auditoría', icon: Activity },
+                { to: '/owner/calendar', label: 'Calendario', icon: CalendarDays },
+                { to: '/owner/security', label: 'Seguridad', icon: Wrench },
               ].map(q => (
                 <Link
                   key={q.to}
