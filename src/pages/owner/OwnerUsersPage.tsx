@@ -8,7 +8,8 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { OwnerLayout, FeatureBadge, BackendNotice, ConfirmModal } from './OwnerLayout';
 import { AdminService, type AdminUserSummary, type AdminUserDetail } from '../../services/admin.service';
-import { Search, ArrowLeft, Ban, RotateCcw, KeyRound, LogOut, ShieldAlert, Video, MailCheck } from 'lucide-react';
+import { Search, ArrowLeft, Ban, RotateCcw, KeyRound, LogOut, ShieldAlert, Video, MailCheck, ShieldCheck } from 'lucide-react';
+import type { UserRole } from '../../types';
 
 type FilterKey = 'ALL' | 'ACTIVE' | 'SUSPENDED' | 'CREATORS' | 'STAFF';
 
@@ -188,6 +189,11 @@ export function OwnerUserDetailPage() {
   const [sessions, setSessions] = useState<Array<{ createdAt: string; expiresAt: string; active: boolean }> | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  // Roles de staff (USER ⇄ MODERATOR ⇄ ADMIN) — solo OWNER
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+  const [roleHistory, setRoleHistory] = useState<Array<{ at: string; adminName: string; targetUsername: string; before: UserRole; after: UserRole }>>([]);
+
   const reload = () => {
     if (!user || !id) return;
     try {
@@ -296,6 +302,43 @@ export function OwnerUserDetailPage() {
     }
   };
 
+  // ---- Roles de staff: USER ⇄ MODERATOR ⇄ ADMIN (solo OWNER) ----
+  const STAFF_ROLES: Array<{ role: UserRole; label: string; desc: string }> = [
+    { role: 'USER', label: 'USER', desc: 'Usuario estándar sin permisos administrativos.' },
+    { role: 'MODERATOR', label: 'MODERATOR', desc: 'Puede moderar canales asignados (chat, reportes de canal).' },
+    { role: 'ADMIN', label: 'ADMIN', desc: 'Administrador: gestión de usuarios, reportes y moderación global.' },
+  ];
+
+  const openRoleModal = () => {
+    if (!user) return;
+    setSelectedRole(null);
+    try {
+      setRoleHistory(AdminService.listRoleChangeHistory(user.id));
+    } catch {
+      setRoleHistory([]);
+    }
+    setRoleModalOpen(true);
+  };
+
+  const doChangeRole = () => {
+    if (!user || !selectedRole) return;
+    setBusy(true);
+    try {
+      const { before, after } = AdminService.changeStaffRole(user.id, detail.id, selectedRole, true);
+      setRoleModalOpen(false); setSelectedRole(null);
+      reload();
+      setToast(`✅ Rol actualizado: ${before} → ${after}. Cambio registrado en auditoría (admin, usuario, roles, fecha/hora).`);
+    } catch (e: any) {
+      const msg = String(e?.message ?? '');
+      const friendly =
+        msg === 'CANNOT_MODIFY_OWNER_ROLE' ? 'El rol OWNER no puede modificarse desde esta interfaz.' :
+        msg === 'CANNOT_MODIFY_SELF_ROLE' ? 'El OWNER no puede modificarse sus propios privilegios.' :
+        msg === 'ROLE_UNCHANGED' ? 'El usuario ya tiene ese rol.' :
+        msg === 'CONFIRMATION_REQUIRED' ? 'Se requiere confirmación explícita.' : msg;
+      setToast(`No se pudo cambiar el rol: ${friendly}`);
+    } finally { setBusy(false); }
+  };
+
   return (
     <OwnerLayout title={detail.displayName} subtitle={`@${detail.username}`}>
       {toast && (
@@ -375,6 +418,11 @@ export function OwnerUserDetailPage() {
                 <button onClick={() => setPwResetOpen(true)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-bg-elevated text-text-secondary border border-border hover:text-white transition-colors">
                   <KeyRound className="w-4 h-4" /> Iniciar restablecimiento de contraseña <FeatureBadge kind="backend" note="El envío seguro del código exige Supabase Auth" />
                 </button>
+                {!isSelf && (
+                  <button onClick={openRoleModal} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-primary/10 text-primary-hover border border-primary/30 hover:bg-primary/20 transition-colors">
+                    <ShieldCheck className="w-4 h-4" /> Promover / degradar rol de staff <FeatureBadge kind="ok" note="Persistente + auditado; la protección server-side definitiva requiere RLS" />
+                  </button>
+                )}
                 <button onClick={() => setDeleteOpen(true)} disabled={isSelf} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-danger/10 text-danger border border-danger/30 hover:bg-danger/20 transition-colors disabled:opacity-40">
                   <Ban className="w-4 h-4" /> Eliminar cuenta <FeatureBadge kind="ok" note="Anonimización local; borrado físico de archivos requiere backend" />
                 </button>
@@ -486,6 +534,67 @@ export function OwnerUserDetailPage() {
       >
         <p>El sistema creará una solicitud de recuperación verificable y la registrará en auditoría.</p>
         <p className="text-warning">⚠️ La entrega segura del código/enlace al email registrado requiere Supabase Auth (backend). Sin backend el proceso NO se completa: el OWNER nunca verá ni definirá la contraseña del usuario.</p>
+      </ConfirmModal>
+
+      <ConfirmModal
+        open={roleModalOpen}
+        title="Promover / degradar rol de staff"
+        confirmLabel={selectedRole ? `Confirmar cambio a ${selectedRole}` : 'Selecciona un rol'}
+        confirming={busy}
+        onCancel={() => { setRoleModalOpen(false); setSelectedRole(null); }}
+        onConfirm={doChangeRole}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-text-secondary">
+            Usuario afectado: <strong className="text-white">@{detail.username}</strong> · Rol actual: <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${roleBadgeClass(detail.role)}`}>{detail.role}</span>
+          </p>
+          <div className="space-y-2">
+            {STAFF_ROLES.map(r => (
+              <label
+                key={r.role}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  r.role === detail.role
+                    ? 'opacity-40 cursor-not-allowed border-border'
+                    : selectedRole === r.role
+                      ? 'border-primary/60 bg-primary/10'
+                      : 'border-border hover:border-primary/40'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="staff-role"
+                  disabled={r.role === detail.role}
+                  checked={selectedRole === r.role}
+                  onChange={() => setSelectedRole(r.role)}
+                  className="mt-1 accent-[var(--color-primary,#2563eb)]"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-white">{r.label}</span>
+                  <span className="block text-xs text-text-muted">{r.desc}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-text-muted">
+            🔒 El rol OWNER es el máximo nivel: no puede asignarse ni removerse desde esta interfaz, y el OWNER no puede modificarse sus propios privilegios. Solo el OWNER actual puede realizar cambios de rol.
+          </p>
+          <p className="text-xs text-warning">
+            ⚠️ Requiere backend/RLS: el cambio persiste en los datos locales de NEXURA y queda auditado, pero la autorización definitiva (server-side) exige Supabase Auth + RLS. Esta UI no presenta la operación como seguridad de producción.
+          </p>
+          {roleHistory.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-1.5">Historial de cambios de rol</p>
+              <ul className="space-y-1 max-h-32 overflow-y-auto">
+                {roleHistory.slice(0, 8).map((h, i) => (
+                  <li key={i} className="text-xs text-text-secondary flex justify-between gap-2">
+                    <span className="truncate">@{h.targetUsername}: {h.before} → {h.after} · por {h.adminName}</span>
+                    <span className="text-text-muted whitespace-nowrap">{fmtDate(h.at)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       </ConfirmModal>
 
       <ConfirmModal

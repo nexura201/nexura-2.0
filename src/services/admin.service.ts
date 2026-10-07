@@ -27,6 +27,12 @@ import { ReportService } from './report.service';
 import { SupportService } from './support.service';
 import { maintenanceModeService } from './maintenanceMode.service';
 import { getCategoryById, updateCategory } from './category';
+import {
+  loadPasswordPolicy,
+  sanitizePolicyInput,
+  savePasswordPolicy,
+  type PasswordPolicy,
+} from './passwordPolicy.service';
 
 // ============================================================
 // TIPOS
@@ -279,6 +285,9 @@ export class AdminService {
       UNBANNED_USER: 'Usuario desbaneado',
       DELETED_USER: 'Usuario eliminado',
       ROLE_CHANGED: 'Rol cambiado',
+      STAFF_ROLE_PROMOTED: 'Staff promovido',
+      STAFF_ROLE_DEGRADED: 'Staff degradado',
+      PASSWORD_POLICY_CHANGED: 'Política de contraseñas actualizada',
       CONFIG_CHANGED: 'Cambio de configuración',
       MAINTENANCE_ENABLED: 'Modo mantenimiento activado',
       MAINTENANCE_DISABLED: 'Modo mantenimiento desactivado',
@@ -845,6 +854,146 @@ export class AdminService {
     AuthorizationService.requireOwner(ownerId);
     db.logoutAllSessions(userId);
     db.createAuditLog(ownerId, 'SESSIONS_CLOSED', 'user', userId, 'Cierre de todas las sesiones');
+  }
+
+  // ============================================================
+  // PROMOVER / DEGRADAR ROLES DE STAFF (USER ⇄ MODERATOR ⇄ ADMIN)
+  // ============================================================
+
+  /**
+   * Cambia el rol de un usuario NO-OWNER entre USER / MODERATOR / ADMIN.
+   *
+   * Reglas aplicadas con la infraestructura existente (sin duplicar el
+   * sistema de roles — reutiliza `AuthorizationService` y
+   * `database.setUserRole`, que ya garantiza inmutabilidad del OWNER):
+   *  - Solo el OWNER actual puede llamar a esta función (requireOwner).
+   *  - Nunca se puede asignar ni remover el rol OWNER (setUserRole lo
+   *    bloquea con OWNER_ROLE_RESERVED / CANNOT_MODIFY_OWNER_ROLE).
+   *  - El OWNER no puede modificarse a sí mismo (no podría degradarse;
+   *    setUserRole además rechaza targets con rol OWNER).
+   *  - Se exige confirmación explícita en la capa UI antes de llamar.
+   *  - Cada cambio queda auditado: quién, a quién, rol anterior → nuevo,
+   *    fecha/hora (createAuditLog) + historial local consultable.
+   *
+   * ⚠️ TRANSPARENCIA DE SEGURIDAD: la verificación `requireOwner` lee el
+   * rol desde localStorage; mientras no exista Supabase Auth + RLS, un
+   * cliente avanzado podría alterar sus datos locales. Esta operación es
+   * REAL y persistente dentro del sistema actual, pero la protección
+   * definitiva (server-side) requiere backend. La UI lo indica siempre.
+   */
+  static changeStaffRole(
+    ownerId: string,
+    targetUserId: string,
+    newRole: UserRole,
+    confirmed: boolean
+  ): { before: UserRole; after: UserRole } {
+    const owner = AuthorizationService.requireOwner(ownerId);
+
+    if (!confirmed) throw new Error('CONFIRMATION_REQUIRED');
+
+    const allowedTargets: UserRole[] = ['USER', 'MODERATOR', 'ADMIN'];
+    if (!allowedTargets.includes(newRole)) throw new Error('INVALID_TARGET_ROLE');
+
+    const target = db.getUserById(targetUserId);
+    if (!target) throw new Error('USER_NOT_FOUND');
+    if (target.role === 'OWNER') throw new Error('CANNOT_MODIFY_OWNER_ROLE');
+    if (target.id === owner.id) throw new Error('CANNOT_MODIFY_SELF_ROLE');
+
+    const before = target.role;
+    if (before === newRole) throw new Error('ROLE_UNCHANGED');
+
+    // database.setUserRole revalida (OWNER reservado / target no-OWNER).
+    db.setUserRole(targetUserId, newRole);
+
+    const rank: Record<string, number> = { USER: 0, MODERATOR: 1, ADMIN: 2 };
+    const isPromotion = (rank[newRole] ?? 0) > (rank[before] ?? 0);
+
+    // Historial local de cambios de rol (trazabilidad consultable).
+    const meta = readMeta();
+    const historyKey = 'roleChanges';
+    const history = Array.isArray(meta[historyKey]) ? meta[historyKey] : [];
+    history.unshift({
+      at: new Date().toISOString(),
+      adminId: owner.id,
+      adminName: owner.displayName || owner.username,
+      targetId: target.id,
+      targetUsername: target.username,
+      before,
+      after: newRole,
+    });
+    meta[historyKey] = history.slice(0, 200);
+    writeMeta(meta);
+
+    db.createAuditLog(
+      ownerId,
+      isPromotion ? 'STAFF_ROLE_PROMOTED' : 'STAFF_ROLE_DEGRADED',
+      'user',
+      targetUserId,
+      `${before} → ${newRole} · @${target.username} por ${owner.username}`
+    );
+
+    return { before, after: newRole };
+  }
+
+  /** Historial real de cambios de rol de staff (persistido localmente). */
+  static listRoleChangeHistory(staffId: string): Array<{
+    at: string; adminName: string; targetUsername: string; before: UserRole; after: UserRole;
+  }> {
+    AuthorizationService.requireOwner(staffId);
+    const meta = readMeta();
+    const history = Array.isArray(meta['roleChanges']) ? meta['roleChanges'] : [];
+    return history.map((h: any) => ({
+      at: String(h.at ?? ''),
+      adminName: String(h.adminName ?? '—'),
+      targetUsername: String(h.targetUsername ?? '—'),
+      before: h.before as UserRole,
+      after: h.after as UserRole,
+    }));
+  }
+
+  // ============================================================
+  // POLÍTICA DE CONTRASEÑAS (Seguridad → Control Center)
+  // ============================================================
+
+  static getPasswordPolicy(): PasswordPolicy {
+    return loadPasswordPolicy();
+  }
+
+  /**
+   * Guarda la política de contraseñas definida por el OWNER.
+   * ✅ Real: persistencia + auditoría (config anterior → nueva, admin, fecha).
+   * ⚠️ Requiere backend: la validación GLOBAL y obligatoria de contraseñas
+   *    debe ejecutarse server-side (Supabase Auth / Edge Function). Mientras
+   *    tanto la política aplica en los flujos locales que la consultan
+   *    (`validatePasswordAgainstPolicy`). Aquí nunca se almacena una
+   *    contraseña: solo reglas (enteros/booleanos).
+   */
+  static updatePasswordPolicy(
+    ownerId: string,
+    updates: Partial<PasswordPolicy>
+  ): PasswordPolicy {
+    const owner = AuthorizationService.requireOwner(ownerId);
+    const current = loadPasswordPolicy();
+    const next = sanitizePolicyInput(current, updates);
+    next.updatedBy = owner.displayName || owner.username;
+
+    const changedKeys = (Object.keys(next) as Array<keyof PasswordPolicy>)
+      .filter(k => k !== 'updatedAt' && k !== 'updatedBy' && next[k] !== current[k]);
+    if (changedKeys.length === 0) return current;
+
+    savePasswordPolicy(next);
+
+    const fmtPolicy = (p: PasswordPolicy) =>
+      `min ${p.minLength}${p.requireUppercase ? ', mayús' : ''}${p.requireLowercase ? ', minús' : ''}${p.requireNumbers ? ', nros' : ''}${p.requireSpecial ? ', especial' : ''}`;
+
+    db.createAuditLog(
+      ownerId,
+      'PASSWORD_POLICY_CHANGED',
+      'platform',
+      'password_policy',
+      `${fmtPolicy(current)} → ${fmtPolicy(next)} (por ${owner.username})`
+    );
+    return next;
   }
 }
 
