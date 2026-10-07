@@ -11,6 +11,15 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { OwnerLayout, FeatureBadge, BackendNotice, ConfirmModal } from './OwnerLayout';
 import { AdminService, type PlatformSettings } from '../../services/admin.service';
+import {
+  StreamingSettingsService,
+  MAX_VIEWERS_PRESETS,
+  LIVE_DURATION_OPTIONS,
+  QUALITY_OPTIONS,
+  formatLiveDuration,
+  formatMaxViewers,
+  type StreamingSettings,
+} from '../../services/streamingSettings.service';
 import { getAllCategories } from '../../services/category';
 import { ReportService } from '../../services/report.service';
 import * as db from '../../services/database';
@@ -272,17 +281,7 @@ export function OwnerSettingsPage() {
               )}
 
               {section === 'streaming' && (
-                <SectionShell title="Streaming">
-                  <Row label="Infraestructura: servidores, colas y estado" badge={<FeatureBadge kind="ok" note="Vistas existentes del panel" />}>
-                    <Link to="/owner/infrastructure" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
-                  </Row>
-                  <Row label="Colas de streaming" badge={<FeatureBadge kind="ok" />}>
-                    <Link to="/owner/infrastructure/queues" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
-                  </Row>
-                  <Row label="Capacidad asignable por servidor" badge={<FeatureBadge kind="backend" />} note="La capacidad real depende del media server (RTMP/HLS); hoy no hay backend de streaming que la administre." />
-                  <Row label="Duración máxima de live / corte forzado" badge={<FeatureBadge kind="backend" />} note="Requiere control del media server desde el servidor." />
-                  <Row label="Calidad máxima de transmisión" badge={<FeatureBadge kind="backend" />} note="Configurable en el media server cuando esté operativo." />
-                </SectionShell>
+                <StreamingSettingsSection ownerId={user?.id ?? null} onToast={m => setToast(m)} />
               )}
 
               {section === 'community' && (
@@ -674,6 +673,281 @@ export function OwnerSecurityPage() {
         </div>
       </div>
     </OwnerLayout>
+  );
+}
+
+// ============================================================
+// SECCIÓN STREAMING — configuraciones administrativas reales
+// (persistencia local; aplicación al streaming pendiente de backend)
+// ============================================================
+
+const inputCls = 'bg-bg-input border border-border rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-primary';
+const btnPrimaryCls = 'px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-white hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+const btnSecondaryCls = 'px-4 py-2 rounded-lg text-sm font-medium bg-bg-elevated text-text-secondary border border-border hover:text-white transition-colors';
+
+/** Etiqueta honesta: la config se guarda, pero aún no la aplica un media server. */
+function PendingBackendTag({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold border rounded-full px-2 py-0.5 bg-warning/10 text-warning border-warning/30">
+      <AlertTriangle className="w-3 h-3" /> {label}
+    </span>
+  );
+}
+
+function StreamingSettingsSection({ ownerId, onToast }: { ownerId: string | null; onToast: (m: string) => void }) {
+  const [streaming, setStreaming] = useState<StreamingSettings>(() => StreamingSettingsService.getSettings());
+
+  // 1) Capacidad asignable por servidor
+  const capacityPresets = MAX_VIEWERS_PRESETS;
+  const [capDraft, setCapDraft] = useState<string>(
+    streaming.maxViewersPerServer !== null && !capacityPresets.some(p => p.value === streaming.maxViewersPerServer)
+      ? String(streaming.maxViewersPerServer)
+      : ''
+  );
+
+  useEffect(() => {
+    if (streaming.maxViewersPerServer !== null &&
+        !MAX_VIEWERS_PRESETS.some(p => p.value === streaming.maxViewersPerServer)) {
+      setCapDraft(String(streaming.maxViewersPerServer));
+    } else if (MAX_VIEWERS_PRESETS.some(p => p.value === streaming.maxViewersPerServer)) {
+      setCapDraft('');
+    }
+  }, [streaming.maxViewersPerServer]);
+
+  const saveCapacity = (value: number | null) => {
+    if (!ownerId) { onToast('No se pudo guardar (permisos).'); return; }
+    try {
+      setStreaming(StreamingSettingsService.setMaxViewersPerServer(ownerId, value));
+      onToast(`✅ Capacidad por servidor guardada: ${formatMaxViewers(value)}. Configuración administrativa guardada localmente — aplicación al streaming requiere backend.`);
+    } catch {
+      onToast('Valor inválido o sin permisos. Ingresá un número entero ≥ 1 o elegí "Sin límite".');
+    }
+  };
+
+  const applyCustomCapacity = () => {
+    const n = Number(capDraft.trim());
+    if (!capDraft.trim() || !Number.isFinite(n) || Math.floor(n) < 1) {
+      onToast('Ingresá un número entero de espectadores mayor que 0.');
+      return;
+    }
+    saveCapacity(Math.floor(n));
+  };
+
+  // 2) Duración máxima de live
+  const [durDraft, setDurDraft] = useState<string>('');
+  const saveDuration = (minutes: number | null) => {
+    if (!ownerId) { onToast('No se pudo guardar (permisos).'); return; }
+    try {
+      setStreaming(StreamingSettingsService.setMaxLiveDuration(ownerId, minutes));
+      setDurDraft('');
+      onToast(`✅ Duración máxima de live guardada: ${formatLiveDuration(minutes)}. Corte automático pendiente de backend.`);
+    } catch {
+      onToast('Duración inválida o sin permisos.');
+    }
+  };
+  const applyCustomDuration = () => {
+    const n = Number(durDraft.trim());
+    if (!durDraft.trim() || !Number.isFinite(n) || Math.floor(n) < 1) {
+      onToast('Ingresá una cantidad de minutos mayor que 0.');
+      return;
+    }
+    saveDuration(Math.floor(n));
+  };
+
+  // 3) Calidad máxima
+  const [qualityDraft, setQualityDraft] = useState<string>(streaming.maxQuality);
+  useEffect(() => { setQualityDraft(streaming.maxQuality); }, [streaming.maxQuality]);
+  const saveQuality = () => {
+    if (!ownerId) { onToast('No se pudo guardar (permisos).'); return; }
+    try {
+      setStreaming(StreamingSettingsService.setMaxQuality(ownerId, qualityDraft));
+      onToast(`✅ Calidad máxima guardada: ${qualityDraft}. Aplicación al streaming pendiente de backend.`);
+    } catch {
+      onToast('Calidad inválida o sin permisos.');
+    }
+  };
+
+  return (
+    <>
+      <SectionShell title="Streaming">
+        {/* Enlaces existentes — NO se modifican (infraestructura/servidores/colas solo se listan) */}
+        <Row label="Infraestructura: servidores, colas y estado" badge={<FeatureBadge kind="ok" note="Vistas existentes del panel" />}>
+          <Link to="/owner/infrastructure" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
+        </Row>
+        <Row label="Colas de streaming" badge={<FeatureBadge kind="ok" />}>
+          <Link to="/owner/infrastructure/queues" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
+        </Row>
+
+        {/* 1) CAPACIDAD ASIGNABLE POR SERVIDOR */}
+        <div className="py-3 border-b border-border last:border-0 space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm text-white flex items-center gap-2 flex-wrap">
+                Capacidad asignable por servidor
+                <FeatureBadge kind="ok" note="Configuración administrativa real, persistente en este dispositivo" />
+              </p>
+              <p className="text-xs text-text-muted mt-0.5">
+                Política de NEXURA: espectadores máximos permitidos por servidor. Es una configuración
+                administrativa — no afirma limitar físicamente un servidor hasta que exista un
+                backend/media server que la aplique.
+              </p>
+            </div>
+            <PendingBackendTag label="Aplicación en streaming: pendiente de backend" />
+          </div>
+
+          <p className="text-sm text-white">
+            Capacidad actual:{' '}
+            <strong className="text-primary-hover">
+              {streaming.maxViewersPerServer === null
+                ? 'Sin límite'
+                : `${formatMaxViewers(streaming.maxViewersPerServer)} espectadores por servidor`}
+            </strong>
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {capacityPresets.map(p => (
+              <button
+                key={p.label}
+                onClick={() => saveCapacity(p.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  streaming.maxViewersPerServer === p.value
+                    ? 'bg-primary/20 border-primary/60 text-primary-hover'
+                    : 'bg-bg-card border-border text-text-secondary hover:text-white'
+                }`}
+              >
+                {p.label}{p.value !== null ? ' espectadores' : ''}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={capDraft}
+              onChange={e => setCapDraft(e.target.value)}
+              placeholder="Valor personalizado (ej. 2500)"
+              aria-label="Capacidad personalizada de espectadores por servidor"
+              className={`w-56 ${inputCls}`}
+            />
+            <button onClick={applyCustomCapacity} className={btnPrimaryCls}>Guardar</button>
+            <button
+              onClick={() => saveCapacity(null)}
+              className={`${streaming.maxViewersPerServer === null ? btnSecondaryCls + ' opacity-60' : btnSecondaryCls}`}
+            >
+              Sin límite
+            </button>
+          </div>
+          <p className="text-[11px] text-text-muted">
+            Última actualización de la configuración: {fmt(streaming.updatedAt)}
+          </p>
+        </div>
+
+        {/* 2) DURACIÓN MÁXIMA DE LIVE / CORTE FORZADO */}
+        <div className="py-3 border-b border-border last:border-0 space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm text-white flex items-center gap-2 flex-wrap">
+                Duración máxima de live / corte forzado
+                <FeatureBadge kind="ok" note="Configuración administrativa real, persistente en este dispositivo" />
+              </p>
+              <p className="text-xs text-text-muted mt-0.5">
+                Define la duración máxima permitida para una transmisión. La configuración queda preparada
+                para que el futuro backend/media server la aplique; hoy el live NO se corta realmente.
+              </p>
+            </div>
+            <PendingBackendTag label="Corte automático del live: pendiente de backend" />
+          </div>
+
+          <p className="text-sm text-white">
+            Duración máxima actual: <strong className="text-primary-hover">{formatLiveDuration(streaming.maxLiveDurationMinutes)}</strong>
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {LIVE_DURATION_OPTIONS.map(o => (
+              <button
+                key={o.label}
+                onClick={() => saveDuration(o.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  streaming.maxLiveDurationMinutes === o.value
+                    ? 'bg-primary/20 border-primary/60 text-primary-hover'
+                    : 'bg-bg-card border-border text-text-secondary hover:text-white'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={durDraft}
+              onChange={e => setDurDraft(e.target.value)}
+              placeholder="Otros minutos (ej. 90)"
+              aria-label="Duración máxima personalizada en minutos"
+              className={`w-56 ${inputCls}`}
+            />
+            <button onClick={applyCustomDuration} className={btnPrimaryCls}>Guardar</button>
+          </div>
+        </div>
+
+        {/* 3) CALIDAD MÁXIMA DE TRANSMISIÓN */}
+        <div className="py-3 border-b border-border last:border-0 space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm text-white flex items-center gap-2 flex-wrap">
+                Calidad máxima de transmisión
+                <FeatureBadge kind="ok" note="Configuración administrativa real, persistente en este dispositivo" />
+              </p>
+              <p className="text-xs text-text-muted mt-0.5">
+                Calidad máxima permitida por política de la plataforma. No modifica la configuración real
+                de RTMP/HLS ni del media server.
+              </p>
+            </div>
+            <PendingBackendTag label="Aplicación al streaming: pendiente de backend" />
+          </div>
+
+          <p className="text-sm text-white">
+            Calidad máxima actual: <strong className="text-primary-hover">{streaming.maxQuality}</strong>
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {QUALITY_OPTIONS.map(q => (
+              <button
+                key={q}
+                onClick={() => setQualityDraft(q)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  qualityDraft === q
+                    ? 'bg-primary/20 border-primary/60 text-primary-hover'
+                    : 'bg-bg-card border-border text-text-secondary hover:text-white'
+                }`}
+              >
+                {q}
+              </button>
+            ))}
+            <button
+              onClick={saveQuality}
+              disabled={qualityDraft === streaming.maxQuality}
+              className={btnPrimaryCls}
+            >
+              {qualityDraft === streaming.maxQuality ? 'Guardada' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      </SectionShell>
+
+      <BackendNotice>
+        <strong className="text-white">Configuración administrativa guardada localmente — aplicación al streaming requiere backend.</strong>{' '}
+        Estas tres opciones guardan la política de NEXURA de forma persistente (sobrevive a la recarga de la
+        página y queda registrada en la auditoría como cambio de configuración), pero todavía no existe un
+        backend/media server que limite físicamente espectadores, corte lives ni restrinja la calidad de las
+        transmisiones. Cada opción muestra su etiqueta «pendiente de backend».
+      </BackendNotice>
+    </>
   );
 }
 
