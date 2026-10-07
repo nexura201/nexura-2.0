@@ -139,8 +139,92 @@ export function initializeDefaultCategories(): void {
   ];
   
   defaultCategories.forEach(cat => {
-    createCategory(cat);
+    // No duplicar: solo crear si el slug no existe ya
+    const slug = toSlug(cat.name);
+    if (!categories.some(c => c.slug === slug)) {
+      createCategory(cat);
+    }
   });
+}
+
+/**
+ * Generar slug a partir de un nombre (normaliza acentos, mayúsculas, etc.)
+ */
+export function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Asegurar que las categorías por defecto existan sin duplicar las actuales.
+ * Se llama al montar la sección de Categorías para garantizar contenido base.
+ */
+export function ensureDefaultCategories(): void {
+  initializeDefaultCategories();
+}
+
+// ============ AGREGACIÓN DE CONTENIDO POR CATEGORÍA ============
+
+export interface CategoryContentCounts {
+  liveStreams: number;
+  channels: number;
+  videos: number;
+  clips: number;
+  total: number;
+}
+
+/**
+ * Obtener estadísticas agregadas de contenido por categoría.
+ * Usa `categoryId` cuando está disponible (canales y streams).
+ * Para videos/clips, se agrupan por la categoría del canal asociado.
+ * Nota: los datos se inyectan desde la capa de presentación para evitar
+ * imports circulares entre servicios.
+ */
+export function getContentCountsByCategory(inputs: {
+  categories: Category[];
+  channels: Array<{ id: string; categoryId: string | null }>;
+  streams?: Array<{ channelId: string; categoryId?: string | null }>;
+  videos?: Array<{ channelId: string }>;
+  clips?: Array<{ channelId: string }>;
+}): Record<string, CategoryContentCounts> {
+  const { categories, channels, streams = [], videos = [], clips = [] } = inputs;
+
+  const counts: Record<string, CategoryContentCounts> = {};
+  for (const cat of categories) {
+    counts[cat.id] = { liveStreams: 0, channels: 0, videos: 0, clips: 0, total: 0 };
+  }
+
+  const channelCategory: Record<string, string | null> = {};
+  for (const ch of channels) {
+    channelCategory[ch.id] = ch.categoryId;
+    if (ch.categoryId && counts[ch.categoryId]) counts[ch.categoryId].channels += 1;
+  }
+
+  for (const s of streams) {
+    const cid = s.categoryId ?? channelCategory[s.channelId] ?? null;
+    if (cid && counts[cid]) counts[cid].liveStreams += 1;
+  }
+
+  for (const v of videos) {
+    const cid = channelCategory[v.channelId] ?? null;
+    if (cid && counts[cid]) counts[cid].videos += 1;
+  }
+
+  for (const c of clips) {
+    const cid = channelCategory[c.channelId] ?? null;
+    if (cid && counts[cid]) counts[cid].clips += 1;
+  }
+
+  for (const id of Object.keys(counts)) {
+    const c = counts[id];
+    c.total = c.videos + c.clips;
+  }
+
+  return counts;
 }
 
 // ============ UTILITY FUNCTIONS ============
