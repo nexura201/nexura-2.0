@@ -78,15 +78,97 @@ export const NEXURA_IA_RULES = `REGLAS DE SEGURIDAD Y COMPORTAMIENTO (prioridad 
 - Ante preguntas sobre precios, contratos, banneos o decisiones legales de la plataforma, derivá a Soporte (/support) o a las páginas de normas.
 - Mantené un trato respetuoso; no generes contenido de odio, acoso ni material para evadir la moderación. Recordá las Normas de la Comunidad si el usuario cruza esos límites.`;
 
+/** Comportamientos configurables de NEXURA IA (Fase 6 — Control Center). */
+export type NexuraIaBehaviorId = 'concisa' | 'equilibrada' | 'detallada';
+
+/** Parámetros reales aplicados por el backend según el comportamiento. */
+export interface NexuraIaBehaviorParams {
+  id: NexuraIaBehaviorId;
+  label: string;
+  description: string;
+  temperature: number;
+  maxOutputTokens: number;
+  thinkingBudget: number;
+  /** Instrucción adicional de estilo que se compone en el system prompt. */
+  styleDirective: string;
+}
+
+export const NEXURA_IA_BEHAVIORS: Record<NexuraIaBehaviorId, NexuraIaBehaviorParams> = {
+  concisa: {
+    id: 'concisa',
+    label: 'Respuesta concisa',
+    description: 'Respuestas breves y directas, al grano.',
+    temperature: 0.5,
+    maxOutputTokens: 1024,
+    thinkingBudget: 0,
+    styleDirective: 'MODO DE RESPUESTA ACTIVADO: CONCISO. Respondé en 1 a 3 oraciones como máximo, directo al punto, sin listas largas ni preámbulos.',
+  },
+  equilibrada: {
+    id: 'equilibrada',
+    label: 'Respuesta equilibrada',
+    description: 'Proporcional a la pregunta: breve para consultas simples, desarrollada cuando haga falta.',
+    temperature: 0.7,
+    maxOutputTokens: 2048,
+    thinkingBudget: -1,
+    styleDirective: 'MODO DE RESPUESTA ACTIVADO: EQUILIBRADO. Dosificá el detalle según la pregunta: breve para consultas simples, más desarrollado solo cuando la pregunta lo justifique.',
+  },
+  detallada: {
+    id: 'detallada',
+    label: 'Respuesta detallada',
+    description: 'Explicaciones completas con pasos, ejemplos y contexto.',
+    temperature: 0.7,
+    maxOutputTokens: 4096,
+    thinkingBudget: -1,
+    styleDirective: 'MODO DE RESPUESTA ACTIVADO: DETALLADO. Desarrollá la respuesta completa: explicación paso a paso, ejemplos concretos y contexto útil, manteniendo la claridad.',
+  },
+};
+
+export const NEXURA_IA_DEFAULT_BEHAVIOR: NexuraIaBehaviorId = 'equilibrada';
+
+/** Valores por defecto del backend (los límites REALES viven en el servidor). */
+export const NEXURA_IA_DEFAULTS = {
+  model: 'gemini-2.5-flash',
+  maxMessageLength: 4000,
+  behavior: NEXURA_IA_DEFAULT_BEHAVIOR,
+  language: 'es',
+} as const;
+
+/** Resuelve el comportamiento real aplicado: entorno del servidor > cliente > default. */
+export function resolveNexuraIaBehavior(
+  envValue?: string,
+  clientValue?: NexuraIaBehaviorId
+): NexuraIaBehaviorParams {
+  const fromEnv = envValue && envValue in NEXURA_IA_BEHAVIORS
+    ? (envValue as NexuraIaBehaviorId)
+    : undefined;
+  const chosen = fromEnv ?? clientValue ?? NEXURA_IA_DEFAULT_BEHAVIOR;
+  return NEXURA_IA_BEHAVIORS[chosen];
+}
+
 /** System prompt completo, compuesto y listo para usar en Gemini. */
-export function buildNexuraIaSystemPrompt(): string {
-  return [
+export function buildNexuraIaSystemPrompt(behavior?: NexuraIaBehaviorParams): string {
+  const parts = [
     NEXURA_IA_IDENTITY,
     '',
     NEXURA_IA_TONE,
     '',
     NEXURA_IA_PLATFORM_CONTEXT,
     '',
+    NEXURA_IA_CREATOR_GUIDE,
+    '',
     NEXURA_IA_RULES,
-  ].join('\n');
+  ];
+  if (behavior) {
+    parts.splice(3, 0, behavior.styleDirective, '');
+  }
+  return parts.join('\n');
 }
+
+/**
+ * Módulo de ayuda para CREADORES (Fase 5): NEXURA IA puede asesorar pero
+ * NUNCA afirmar que ejecutó acciones (crear/programar un live, cambiar título, etc.).
+ */
+const NEXURA_IA_CREATOR_GUIDE = `AYUDA PARA CREADORES (asesoramiento, no ejecución):
+Podés ayudar a creadores con: títulos atractivos para streams, descripciones, ideas de contenido y de Reels, planificación de directos, elección de categorías, consejos para mejorar producción (audio, cámara, iluminación, overlay) y estrategias de crecimiento dentro de NEXURA (constancia de horarios, interacción con el chat, uso de Reels y clips para descubrirabilidad, seguimiento de analíticas del Dashboard).
+Si te piden ideas para un directo (ej.: "quiero hacer un directo de gaming esta noche"), ofrecé opciones concretas: 3-5 títulos, una descripción lista para copiar, categoría sugerida (de las existentes en Categorías) e ideas de interacción con la audiencia.
+LÍMITE INNEGOCIABLE: vos NO podés crear, programar ni modificar el live de nadie. Decí siempre: "puedo explicarte cómo hacerlo" o "te dejo el texto listo para copiarlo en tu Dashboard", nunca "ya lo creé/programé". Para ejecutar acciones, el creador debe usar /dashboard.`;
