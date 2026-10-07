@@ -19,13 +19,56 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 // Contexto centralizado de NEXURA IA (Etapa 3A): identidad, funciones reales y reglas.
 // Módulo .ts puro SIN secretos: la GEMINI_API_KEY sigue leyendo solo de process.env arriba.
-import { buildNexuraIaSystemPrompt } from '../../src/config/nexuraIA.context';
+import {
+  buildNexuraIaSystemPrompt,
+  BEHAVIOR_PARAMS,
+} from '../../src/config/nexuraIA.context';
 
-/** Modelo de Gemini usado por NEXURA IA (configurable vía entorno de servidor). */
+/** Modelo de Gemini usado por NEXURA IA (fallback si no hay configuración guardada). */
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 
-/** Límite de longitud del mensaje entrante (validación básica, sin costo). */
+/** Límite duro de longitud del mensaje entrante (validación básica, sin costo). */
 const MAX_MESSAGE_LENGTH = 4000;
+
+/** Tokens de salida usados en el runtime serverless (sin localStorage compartido). */
+const SERVER_MAX_OUTPUT_TOKENS = 2048;
+
+/**
+ * Resolución del modelo REALMENTE aplicada por el servidor:
+ * GEMINI_MODEL (entorno) > default de NEXURA.
+ * El selector de modelo del panel es una preferencia administrativa que se
+ * refleja en el servidor mediante la variable de entorno GEMINI_MODEL
+ * (el runtime serverless no comparte el localStorage del navegador).
+ */
+function resolveModel(): string {
+  return process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+}
+
+/** Comportamiento realmente aplicado: GEMINI_BEHAVIOR (entorno) > equilibrado. */
+function resolveBehaviorSettings(): { behavior: keyof typeof BEHAVIOR_PARAMS; maxResponseTokens: number } {
+  const b = process.env.GEMINI_BEHAVIOR?.trim().toLowerCase();
+  const behavior: keyof typeof BEHAVIOR_PARAMS =
+    b === 'concise' || b === 'balanced' || b === 'detailed' ? b : 'balanced';
+  return { behavior, maxResponseTokens: SERVER_MAX_OUTPUT_TOKENS };
+}
+
+/**
+ * GET /api/ai/chat — Verificación segura de estado (sin secretos).
+ * Informa al Control Center si la función está desplegada y si el servidor
+ * tiene configurada la variable GEMINI_API_KEY (solo booleanos; jamás valores).
+ */
+function handleStatus(req: VercelRequest, res: VercelResponse) {
+  const envEnabled = process.env.GEMINI_AI_ENABLED?.trim().toLowerCase();
+  res.status(200).json({
+    ok: true,
+    service: 'nexura-ia',
+    endpointReady: true,
+    configured: Boolean(process.env.GEMINI_API_KEY),
+    model: resolveModel(),
+    enabled: !(envEnabled === 'false' || envEnabled === '0'),
+    timestamp: new Date().toISOString(),
+  });
+}
 
 /** CORS mínimo para permitir llamadas desde el frontend desplegado. */
 function setCors(res: VercelResponse) {
@@ -42,12 +85,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // GET → verificación segura de estado (usada por el Control Center).
+  if (req.method === 'GET') {
+    handleStatus(req, res);
+    return;
+  }
+
   if (req.method !== 'POST') {
     res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
     return;
   }
 
   try {
+    // ── Pausa operativa del servicio (variable de entorno del servidor) ───
+    // Honestidad: el toggle "Activa/Desactivada" del panel se guarda en el
+    // navegador del OWNER; la pausa REAL del servicio en producción se hace
+    // con GEMINI_AI_ENABLED=false en Vercel (sin redeploy de código).
+    const envEnabled = process.env.GEMINI_AI_ENABLED?.trim().toLowerCase();
+    if (envEnabled === 'false' || envEnabled === '0') {
+      res.status(503).json({ ok: false, error: 'AI_DISABLED' });
+      return;
+    }
+
     // ── 1. Validación de la solicitud ─────────────────────────────────────
     const body = (req.body ?? {}) as { message?: unknown };
     const message = typeof body.message === 'string' ? body.message.trim() : '';
@@ -70,7 +129,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+    // Nota honesta sobre configuración: el runtime serverless NO comparte el
+    // localStorage del navegador donde el panel OWNER guarda su configuración.
+    // Por eso, en producción el modelo/behavior efectivos los define el
+    // ENTORNO del servidor (GEMINI_MODEL, GEMINI_BEHAVIOR); si no están
+    // definidos, se usan los defaults de NEXURA.
+    const effectiveSettings = resolveBehaviorSettings();
+    const model = resolveModel();
 
     // ── 3. Llamada a Google Gemini (SDK oficial @google/genai) ────────────
     const ai = new GoogleGenAI({ apiKey });
@@ -79,11 +144,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       model,
       contents: message,
       config: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
+        // Comportamiento configurado (entorno > default serverless).
+        temperature: BEHAVIOR_PARAMS[effectiveSettings.behavior].temperature,
+        maxOutputTokens: effectiveSettings.maxResponseTokens,
         // Identidad + contexto oficial + reglas de comportamiento (Etapa 3A).
         // Fuente única: src/config/nexuraIA.context.ts (sin duplicar en el frontend).
-        systemInstruction: buildNexuraIaSystemPrompt(),
+        systemInstruction: buildNexuraIaSystemPrompt(effectiveSettings),
       },
     });
 

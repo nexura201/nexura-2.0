@@ -78,12 +78,163 @@ export const NEXURA_IA_RULES = `REGLAS DE SEGURIDAD Y COMPORTAMIENTO (prioridad 
 - Ante preguntas sobre precios, contratos, banneos o decisiones legales de la plataforma, derivá a Soporte (/support) o a las páginas de normas.
 - Mantené un trato respetuoso; no generes contenido de odio, acoso ni material para evadir la moderación. Recordá las Normas de la Comunidad si el usuario cruza esos límites.`;
 
+// ============================================================
+// CONFIGURACIÓN ADMINISTRATIVA DE NEXURA IA (Control Center — Etapa 3B)
+// ------------------------------------------------------------
+// Módulo .ts PURO (sin React ni dependencias de Vite): puede ser importado
+// tanto por el panel OWNER como por la Serverless Function api/ai/chat.ts.
+// NO contiene secretos: GEMINI_API_KEY sigue viviendo ÚNICAMENTE en
+// process.env del servidor. Aquí solo hay opciones de comportamiento.
+//
+// HONESTIDAD FUNCIONAL:
+//  - enabled / modelo / comportamiento / longitud máxima de respuesta:
+//    se aplican REALMENTE en cada request dentro de /api/ai/chat.
+//  - idioma, longitud máxima de mensaje y límite de solicitudes:
+//    configuración PREPARADA; su aplicación backend total está pendiente
+//    (el límite duro de mensaje hoy lo fija el backend; el rate limiting
+//    requiere persistencia server-side que aún no existe).
+// ============================================================
+
+/** Comportamiento de respuesta configurable desde el panel. */
+export type NexuraIABehavior = 'concise' | 'balanced' | 'detailed';
+
+export interface NexuraIASettings {
+  /** Estado de NEXURA IA: activa/desactivada (aplicado por el backend). */
+  enabled: boolean;
+  /** Modelo de Gemini a usar (GEMINI_MODEL del entorno tiene prioridad). */
+  model: string;
+  /** Comportamiento: conciso / equilibrado / detallado. */
+  behavior: NexuraIABehavior;
+  /** Idioma principal (es preparado; la detección multilingüe es futura). */
+  language: 'es';
+  /** Longitud máxima de mensaje entrante (chars). Pendiente de aplicar dinámicamente. */
+  maxMessageLength: number;
+  /** Longitud máxima de respuesta (tokens de salida). SÍ aplicada vía maxOutputTokens. */
+  maxResponseTokens: number;
+  /** Límite de solicitudes por usuario/hora. Pendiente de backend. */
+  requestsPerHour: number;
+  updatedAt: string;
+}
+
+export const NEXURA_IA_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.5-flash-lite',
+];
+
+/**
+ * Determina si un nombre de modelo es estructuralmente válido (patrones
+ * conocidos de Google Gemini). Se usa como red de seguridad para no invalidar
+ * modelos ya desplegados por el entorno (p. ej. gemini-2.0-flash) sin perder
+ * la validación ante valores arbitrarios.
+ */
+export function isKnownGeminiModel(m: string): boolean {
+  if (NEXURA_IA_MODELS.includes(m)) return true;
+  return /^gemini-[0-9]+\.[0-9]+(-[a-z0-9]+)+$/.test(m);
+}
+
+export const BEHAVIOR_OPTIONS: { value: NexuraIABehavior; label: string }[] = [
+  { value: 'concise', label: 'Concisa' },
+  { value: 'balanced', label: 'Equilibrada' },
+  { value: 'detailed', label: 'Detallada' },
+];
+
+/** Parámetros reales que usa el backend según el comportamiento elegido. */
+export const BEHAVIOR_PARAMS: Record<NexuraIABehavior, { temperature: number; style: string }> = {
+  concise: {
+    temperature: 0.4,
+    style: 'Estilo CONCISO (configuración del OWNER): respondé en 1 a 3 frases o una lista muy corta, directo al punto, sin preámbulos.',
+  },
+  balanced: {
+    temperature: 0.7,
+    style: 'Estilo EQUILIBRADO (configuración del OWNER): respuestas de extensión moderada, proporcionales a la pregunta, con detalles solo cuando aporten valor.',
+  },
+  detailed: {
+    temperature: 0.8,
+    style: 'Estilo DETALLADO (configuración del OWNER): respuestas completas y bien explicadas, con pasos e ejemplos concretos cuando sean útiles, manteniendo la claridad.',
+  },
+};
+
+const NEXURA_IA_SETTINGS_KEY = 'nexura_ia_settings';
+
+export const DEFAULT_NEXURA_IA_SETTINGS: NexuraIASettings = {
+  enabled: true,
+  model: 'gemini-2.5-flash',
+  behavior: 'balanced',
+  language: 'es',
+  maxMessageLength: 4000,
+  maxResponseTokens: 2048,
+  requestsPerHour: 30,
+  updatedAt: new Date(0).toISOString(),
+};
+
+function sanitizeBehavior(v: unknown): NexuraIABehavior {
+  return v === 'concise' || v === 'balanced' || v === 'detailed' ? v : DEFAULT_NEXURA_IA_SETTINGS.behavior;
+}
+
+function sanitizeInt(v: unknown, min: number, max: number, fallback: number): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(n)));
+}
+
+/**
+ * Carga la configuración administrativa de NEXURA IA.
+ * En el navegador lee localStorage (panel OWNER); en el serverless run
+ * devuelve los defaults (no hay localStorage en runtime Node), por lo que
+ * nunca falla ni expone nada.
+ */
+export function loadNexuraIASettings(): NexuraIASettings {
+  try {
+    if (typeof localStorage === 'undefined') return { ...DEFAULT_NEXURA_IA_SETTINGS };
+    const raw = localStorage.getItem(NEXURA_IA_SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_NEXURA_IA_SETTINGS };
+    const parsed = JSON.parse(raw) as Partial<NexuraIASettings>;
+    return {
+      enabled: parsed.enabled === false ? false : true,
+      model: typeof parsed.model === 'string' && isKnownGeminiModel(parsed.model)
+        ? parsed.model
+        : DEFAULT_NEXURA_IA_SETTINGS.model,
+      behavior: sanitizeBehavior(parsed.behavior),
+      language: 'es',
+      maxMessageLength: sanitizeInt(parsed.maxMessageLength, 200, 4000, DEFAULT_NEXURA_IA_SETTINGS.maxMessageLength),
+      maxResponseTokens: sanitizeInt(parsed.maxResponseTokens, 256, 8192, DEFAULT_NEXURA_IA_SETTINGS.maxResponseTokens),
+      requestsPerHour: sanitizeInt(parsed.requestsPerHour, 1, 1000, DEFAULT_NEXURA_IA_SETTINGS.requestsPerHour),
+      updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : DEFAULT_NEXURA_IA_SETTINGS.updatedAt,
+    };
+  } catch {
+    return { ...DEFAULT_NEXURA_IA_SETTINGS };
+  }
+}
+
+/** Persiste la configuración (solo disponible en navegador; usada por el panel). */
+export function saveNexuraIASettings(updates: Partial<NexuraIASettings>): NexuraIASettings {
+  const current = loadNexuraIASettings();
+  const next: NexuraIASettings = {
+    ...current,
+    ...updates,
+    language: 'es',
+    behavior: sanitizeBehavior(updates.behavior ?? current.behavior),
+    updatedAt: new Date().toISOString(),
+  };
+  localStorage.setItem(NEXURA_IA_SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
+
+/** Texto legible del comportamiento actual. */
+export function formatNexuraIABehavior(b: NexuraIABehavior): string {
+  return b === 'concise' ? 'Concisa' : b === 'detailed' ? 'Detallada' : 'Equilibrada';
+}
+
 /** System prompt completo, compuesto y listo para usar en Gemini. */
-export function buildNexuraIaSystemPrompt(): string {
+export function buildNexuraIaSystemPrompt(settings?: Pick<NexuraIASettings, 'behavior'>): string {
+  const behavior = settings?.behavior ?? DEFAULT_NEXURA_IA_SETTINGS.behavior;
   return [
     NEXURA_IA_IDENTITY,
     '',
     NEXURA_IA_TONE,
+    '',
+    BEHAVIOR_PARAMS[behavior].style,
     '',
     NEXURA_IA_PLATFORM_CONTEXT,
     '',
