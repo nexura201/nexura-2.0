@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import * as db from '../services/database';
@@ -11,8 +11,9 @@ import {
   Compass, Grid3X3, Heart, Library, Play, Radio,
   Users, TrendingUp, Search, Gamepad2, MessageCircle, Music,
   Trophy, Cpu, Globe, Drama, Palette, UtensilsCrossed,
-  Sparkles, X, ArrowRight, Video
+  Sparkles, X, ArrowRight, Video, Send, Loader2, AlertTriangle, RotateCcw, Bot
 } from 'lucide-react';
+import { sendMessage as nexuraIASendMessage, NexuraIAError } from '../services/nexuraIA.service';
 
 /**
  * Mapeo de slug de categoría -> icono Lucide + acento visual.
@@ -289,27 +290,227 @@ function CategoryCard({ category, counts }: CategoryCardProps) {
   );
 }
 
-function NexuraIACard() {
-  const [showModal, setShowModal] = useState(false);
+/**
+ * Chat de NEXURA IA (Etapa 2)
+ * ---------------------------
+ * Conectado al endpoint serverless seguro POST /api/ai/chat
+ * (Usuario → NEXURA IA → Backend → Gemini → respuesta).
+ * La API Key nunca toca el navegador: vive solo en el servidor.
+ * Sin memoria/historial persistente: el chat vive mientras el modal está abierto.
+ */
+interface NexuraIAChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
+  const [messages, setMessages] = useState<NexuraIAChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const lastUserMessageRef = useRef<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!showModal) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowModal(false);
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
+    inputRef.current?.focus();
     return () => window.removeEventListener('keydown', onKey);
-  }, [showModal]);
+  }, [onClose]);
+
+  useEffect(() => {
+    // Autoscroll al último mensaje
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, sending, error]);
+
+  const handleSend = async (rawText?: string) => {
+    const text = (rawText ?? input).trim();
+    if (!text || sending) return;
+
+    setError(null);
+    lastUserMessageRef.current = text;
+    setMessages(prev => [...prev, { id: `u-${Date.now()}`, role: 'user', text }]);
+    setInput('');
+    setSending(true);
+
+    try {
+      const result = await nexuraIASendMessage(text);
+      setMessages(prev => [
+        ...prev,
+        { id: `a-${Date.now()}`, role: 'assistant', text: result.reply },
+      ]);
+    } catch (err: unknown) {
+      const message =
+        err instanceof NexuraIAError
+          ? err.message
+          : 'Ocurrió un error inesperado con NEXURA IA. Intentá nuevamente.';
+      setError(message);
+    } finally {
+      setSending(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleRetry = () => {
+    const last = lastUserMessageRef.current;
+    if (last) void handleSend(last);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void handleSend();
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="nexura-ia-chat-title"
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+
+      <div className="relative flex w-full sm:max-w-2xl h-[85vh] sm:h-[70vh] max-h-[720px] flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl border border-primary/30 bg-surface-2 shadow-[0_24px_80px_-24px_rgba(22,119,255,0.5)]">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 border-b border-border bg-bg-card px-4 py-3 sm:px-5">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/40 bg-primary/15 text-primary-hover">
+              <Bot className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h4 id="nexura-ia-chat-title" className="text-sm font-bold text-white truncate">
+                NEXURA IA
+              </h4>
+              <p className="text-xs text-text-muted truncate">
+                Asistente oficial — conectado de forma segura por el backend
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar NEXURA IA"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:text-white hover:border-primary/40"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Mensajes */}
+        <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4 sm:px-5 space-y-3">
+          {messages.length === 0 && !sending && (
+            <div className="flex h-full flex-col items-center justify-center text-center px-4">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-primary/40 bg-primary/15 text-primary-hover">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-semibold text-white mb-1">Hola, soy NEXURA IA</p>
+              <p className="text-xs text-text-secondary max-w-sm">
+                Escribí un mensaje y te respondo a través del backend seguro de NEXURA.
+              </p>
+            </div>
+          )}
+
+          {messages.map(m => (
+            <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className={
+                  m.role === 'user'
+                    ? 'max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-white whitespace-pre-wrap break-words'
+                    : 'max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-bl-md border border-border bg-bg-card px-4 py-2.5 text-sm text-white whitespace-pre-wrap break-words'
+                }
+              >
+                {m.text}
+              </div>
+            </div>
+          ))}
+
+          {sending && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2 rounded-2xl rounded-bl-md border border-border bg-bg-card px-4 py-2.5 text-sm text-text-secondary">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                NEXURA IA está pensando…
+              </div>
+            </div>
+          )}
+
+          {error && !sending && (
+            <div className="flex justify-start">
+              <div className="flex max-w-[90%] items-start gap-2 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <p>{error}</p>
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    disabled={!lastUserMessageRef.current}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning transition-colors hover:bg-warning/20 disabled:opacity-40"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Reenviar mensaje
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="border-t border-border bg-bg-card px-4 py-3 sm:px-5">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleSend();
+            }}
+            className="flex items-end gap-2"
+          >
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+              rows={1}
+              maxLength={4000}
+              placeholder="Escribí un mensaje para NEXURA IA…"
+              aria-label="Mensaje para NEXURA IA"
+              className="max-h-32 min-h-[2.75rem] flex-1 resize-none rounded-xl border border-border bg-surface px-4 py-3 text-sm text-white placeholder-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={sending || !input.trim()}
+              aria-label="Enviar mensaje"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-white transition-colors hover:bg-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </button>
+          </form>
+          <p className="mt-2 text-[11px] text-text-muted">
+            Enter para enviar · Shift+Enter para salto de línea · Respuestas generadas por IA a través del backend seguro de NEXURA
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NexuraIACard() {
+  const [showChat, setShowChat] = useState(false);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setShowModal(true)}
-        aria-label="NEXURA IA — Próximamente. Ver información"
+        onClick={() => setShowChat(true)}
+        aria-label="NEXURA IA — Abrir asistente"
         className="group relative block w-full overflow-hidden rounded-2xl border border-primary/40 bg-gradient-to-br from-surface-2 via-bg-card to-surface-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all duration-300 hover:-translate-y-1 hover:border-primary/70 hover:shadow-[0_16px_48px_-16px_rgba(22,119,255,0.55)]"
       >
-        {/* Resplandor sutil de funcion futura */}
+        {/* Resplandor sutil */}
         <div className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-primary/20 blur-3xl transition-opacity duration-500 group-hover:opacity-100 opacity-70" />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-accent/10" />
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary to-transparent" />
@@ -319,8 +520,8 @@ function NexuraIACard() {
             <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-primary/40 bg-primary/15 text-primary-hover transition-transform duration-300 group-hover:scale-105">
               <Sparkles className="h-6 w-6" />
             </div>
-            <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-primary-hover animate-pulse">
-              Próximamente
+            <span className="rounded-full border border-success/40 bg-success/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-success">
+              Beta
             </span>
           </div>
 
@@ -328,64 +529,17 @@ function NexuraIACard() {
             NEXURA IA
           </h3>
           <p className="text-sm text-secondary line-clamp-2 min-h-[2.5rem]">
-            Una nueva generación de herramientas inteligentes para creadores y comunidades de NEXURA.
+            El asistente oficial de NEXURA. Preguntá lo que necesites sobre la plataforma, streaming y creación de contenido.
           </p>
 
           <div className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-primary">
-            Ver información
+            Abrir asistente
             <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1" />
           </div>
         </div>
       </button>
 
-      {/* Modal informativo */}
-      {showModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="nexura-ia-modal-title"
-        >
-          <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setShowModal(false)}
-          />
-          <div className="relative w-full max-w-md rounded-2xl border border-primary/30 bg-surface-2 p-6 shadow-[0_24px_80px_-24px_rgba(22,119,255,0.5)]">
-            <button
-              type="button"
-              onClick={() => setShowModal(false)}
-              aria-label="Cerrar"
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:text-white hover:border-primary/40"
-            >
-              <X className="h-4 w-4" />
-            </button>
-
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-primary/40 bg-primary/15 text-primary-hover">
-              <Sparkles className="h-6 w-6" />
-            </div>
-
-            <span className="inline-block rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary-hover mb-3">
-              En desarrollo
-            </span>
-
-            <h4 id="nexura-ia-modal-title" className="text-lg font-bold text-white mb-2">
-              NEXURA IA — Próximamente
-            </h4>
-            <p className="text-sm text-secondary leading-relaxed mb-5">
-              Estamos construyendo una nueva generación de herramientas inteligentes
-              para creadores y comunidades de NEXURA. Estará disponible muy pronto.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setShowModal(false)}
-              className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-2"
-            >
-              Entendido
-            </button>
-          </div>
-        </div>
-      )}
+      {showChat && <NexuraIAChatModal onClose={() => setShowChat(false)} />}
     </>
   );
 }
