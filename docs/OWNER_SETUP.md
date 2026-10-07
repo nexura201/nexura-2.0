@@ -47,6 +47,49 @@
 - En un despliegue nuevo (otra máquina/navegador), el OWNER se recrea
   automáticamente desde el hash de bootstrap con la contraseña inicial.
 
+### ¿Por qué el OWNER fallaba en Vercel? (causa raíz)
+
+El login busca al usuario en `localStorage['nexura_users']` del navegador.
+En producción, si ese storage ya contenía una versión anterior de la base
+(creada antes de existir el OWNER), `provisionOwner()` no lo agregaba porque
+la colección ya estaba sembrada → `authenticateUser('nexura_owner', …)` no
+encontraba al usuario → "Credenciales inválidas". El código y el build eran
+correctos; el problema era el estado viejo del navegador + falta de override
+por entorno.
+
+### Solución aplicada
+
+1. `provisionOwner()` ahora corre siempre en `seedDatabase()` y es
+   idempotente por rol (si ya hay un OWNER no lo duplica ni resetea).
+2. El hash de bootstrap puede sobrecribirse por entorno con la env var de
+   build `VITE_OWNER_PASSWORD_HASH` (leída vía `import.meta.env`; solo
+   contiene el HASH, nunca la contraseña en claro). Si está ausente, se usa
+   el hash default embebido → primera visita en un navegador limpio ya crea
+   al OWNER sin configurar nada.
+
+### Configuración requerida en Vercel
+
+| Variable | Valor | Tipo | Cuándo |
+|---|---|---|---|
+| *(ninguna obligatoria)* | — | — | Con `Deploy → Redeploy` alcanza para servir el bundle actual |
+| `VITE_OWNER_PASSWORD_HASH` | `hashed_…` (solo el hash) | **Pública / Build** | Opcional: solo si se quiere rotar la semilla del OWNER |
+
+Importante: las `VITE_*` son variables de BUILD, quedan embebidas en el JS
+del navegador. Por eso NUNCA va ahí la contraseña en claro, solo el hash de
+bootstrap. Tras cambiar la env var hay que redeployar para que se inyecte.
+
+### Verificación del flujo Vercel → Login → OWNER → Control Center
+
+1. Vercel → **Redeploy** (asegura que el sitio sirva el bundle actual).
+2. En el navegador afectado: DevTools → Application → Local Storage → borrar
+   claves `nexura_*` (estado viejo).
+3. Recargar → `/login` → `nexura_owner` o `owner@nexura.live` + contraseña
+   inicial → OK.
+4. Navegar a `/owner` → Control Center accesible (guard `role === 'OWNER'`).
+5. `/settings` → Seguridad → cambiar contraseña → logout automático → re-login
+   con la nueva → sigue siendo OWNER (`updateUser` borra todo intento de
+   modificar `role`; `setUserRole` rechaza OWNER; `provisionOwner` no resetea).
+
 **Migración recomendada (producción)** — usar el sistema de autenticación
 previsto en la arquitectura, sin crear un segundo sistema:
 
