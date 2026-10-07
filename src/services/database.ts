@@ -326,6 +326,15 @@ export function getFollowing(userId: string): Follow[] {
   return follows.filter(f => f.followerId === userId);
 }
 
+/** Auditoría filtrada por acción (para trazabilidad administrativa). */
+export function getAuditLogsByAction(action: string, limit = 50): AuditLog[] {
+  const logs = getCollection<AuditLog>(DB_KEYS.auditLogs);
+  return logs
+    .filter(l => l.action === action)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, limit);
+}
+
 export function getPlatformStats() {
   const users = getAllUsers();
   const channels = getAllChannels();
