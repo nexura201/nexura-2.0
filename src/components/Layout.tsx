@@ -5,7 +5,7 @@ import { SupportFloatingButton } from './SupportFloatingButton';
 import {
   Home, Compass, Grid3X3, Heart, Library, LayoutDashboard,
   Settings, LogOut, Menu, X, Search, Bell, User, ChevronDown,
-  Shield, Radio, LifeBuoy
+  Shield, Radio, LifeBuoy, Film
 } from 'lucide-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -24,6 +24,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { icon: Home, label: 'Inicio', path: '/' },
     { icon: Compass, label: 'Explorar', path: '/explore' },
+    { icon: Film, label: 'Reels', path: '/reels' },
     { icon: Grid3X3, label: 'Categorías', path: '/categories' },
     ...(user ? [
       { icon: Heart, label: 'Siguiendo', path: '/following' },
