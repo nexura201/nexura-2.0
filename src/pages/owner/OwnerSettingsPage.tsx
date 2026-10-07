@@ -18,6 +18,7 @@ import type { AuditLog } from '../../types';
 import {
   Settings2, Users, Video, Radio, MessageSquare, CreditCard, Shield,
   Palette, Bell, Server, Download, Search, Wrench, CheckCircle2, AlertTriangle, Activity,
+  Lock, ShieldCheck, Image as ImageIcon, Code2, Star, Globe, Type, Shapes,
 } from 'lucide-react';
 
 const fmt = (iso: string | null | undefined) => {
@@ -322,21 +323,102 @@ export function OwnerSettingsPage() {
               )}
 
               {section === 'appearance' && (
-                <SectionShell title="Apariencia">
-                  <p className="text-sm text-text-secondary leading-relaxed">
-                    La identidad visual de NEXURA (logo oficial y paleta azul marino + azul eléctrico) está centralizada
-                    en los assets <code className="text-primary-hover">/brand/*</code> y los tokens de{' '}
-                    <code className="text-primary-hover">src/index.css</code>, y <strong className="text-white">no se modifica desde este panel</strong>.
-                    Preparación para administración futura de logo, favicon, nombre y elementos visuales:
-                  </p>
-                  <Row label="Nombre visible de la plataforma" badge={<FeatureBadge kind="ok" />} note="Se administra en General → Nombre de la plataforma.">
-                    <button onClick={() => setSection('general')} className="text-sm text-primary-hover hover:underline">Ir →</button>
-                  </Row>
-                  <Row label="Logo / favicon" badge={<FeatureBadge kind="backend" />} note="Reemplazar assets exige despliegue controlado (storage + revisión de marca). No se permite subir logos desde el cliente." />
-                  <Row label="Temas / paletas personalizables" badge={<FeatureBadge kind="soon" />} note="Fuera de alcance actual: la paleta oficial no se edita." />
-                  <Row label="Ocultar sección “Explorar”" badge={<FeatureBadge kind="backend" />} note="Las flags de visibilidad deben aplicarse en servidor para ser consistentes entre dispositivos." />
-                  <Row label="Cambiar orden de navegación" badge={<FeatureBadge kind="backend" />} note="Ídem: requiere persistencia server-side de preferencias." />
-                </SectionShell>
+                <>
+                  <SectionShell title="Apariencia">
+                    <p className="text-sm text-text-secondary leading-relaxed">
+                      La identidad visual de NEXURA está centralizada y protegida para mantener la coherencia visual de toda la plataforma.
+                    </p>
+
+                    {/* Estado actual de la identidad visual (solo informativo, sin edición) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="bg-bg-elevated border border-border rounded-xl p-4 flex items-start gap-3">
+                        <ImageIcon className="w-4 h-4 text-primary-hover mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white">Logo oficial</p>
+                          <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                            Activo y centralizado en los assets <code className="text-primary-hover">/brand/*</code>. No se edita desde este panel.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="bg-bg-elevated border border-border rounded-xl p-4 flex items-start gap-3">
+                        <Palette className="w-4 h-4 text-primary-hover mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white">Paleta principal</p>
+                          <p className="text-xs text-text-muted mt-1 leading-relaxed">Azul marino + azul eléctrico.</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            {[
+                              { hex: '#07111F', name: 'Navy — fondo' },
+                              { hex: '#0D1B2A', name: 'Navy — superficie' },
+                              { hex: '#1677FF', name: 'Azul eléctrico — marca' },
+                              { hex: '#3D9BFF', name: 'Azul eléctrico — hover' },
+                            ].map((c) => (
+                              <span key={c.hex} className="flex items-center gap-1.5" title={`${c.name} (${c.hex})`}>
+                                <span className="w-4 h-4 rounded-md border border-border shrink-0" style={{ backgroundColor: c.hex }} />
+                                <span className="text-[10px] font-mono text-text-muted">{c.hex}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-bg-elevated border border-border rounded-xl p-4 flex items-start gap-3">
+                        <Code2 className="w-4 h-4 text-primary-hover mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white">Tokens visuales</p>
+                          <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                            Centralizados en <code className="text-primary-hover">src/index.css</code> (definición única de la paleta oficial).
+                          </p>
+                        </div>
+                      </div>
+                      <div className="bg-bg-elevated border border-border rounded-xl p-4 flex items-start gap-3">
+                        <ShieldCheck className="w-4 h-4 text-success mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white">Estado</p>
+                          <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                            Identidad visual activa en toda la plataforma.
+                          </p>
+                          <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold border rounded-full px-2 py-0.5 bg-success/10 text-success border-success/30">
+                            Identidad visual activa
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Row
+                      label="Edición desde este panel"
+                      badge={<FeatureBadge kind="soon" />}
+                      note="No disponible actualmente: logo y paleta no pueden modificarse desde el Control Center. Cualquier cambio de identidad exige despliegue controlado sobre /brand/* y src/index.css."
+                    >
+                      <Lock className="w-4 h-4 text-text-muted" />
+                    </Row>
+                  </SectionShell>
+
+                  <SectionShell title="Administración visual futura">
+                    <p className="text-sm text-text-secondary leading-relaxed">
+                      Próximamente esta sección podrá permitir administrar, desde el Control Center, los elementos de la identidad visual de la plataforma:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {[
+                        { icon: ImageIcon, label: 'Logo principal' },
+                        { icon: Star, label: 'Favicon' },
+                        { icon: Type, label: 'Nombre de la plataforma' },
+                        { icon: Shapes, label: 'Elementos visuales de marca' },
+                        { icon: Palette, label: 'Colores principales' },
+                        { icon: Globe, label: 'Otros elementos de identidad visual' },
+                      ].map((item) => (
+                        <div key={item.label} className="bg-bg-elevated border border-border rounded-xl p-3.5 flex items-center gap-2.5">
+                          <item.icon className="w-4 h-4 text-primary-hover shrink-0" />
+                          <span className="text-sm text-white min-w-0">{item.label}</span>
+                          <span className="ml-auto shrink-0 inline-flex items-center text-[11px] font-semibold border rounded-full px-2 py-0.5 bg-bg-card text-text-muted border-border">
+                            🚧 Próximamente
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-text-muted leading-relaxed">
+                      Preparado para futura administración. Ninguna de estas opciones está operativa hoy: no se modifica el logo, la paleta ni los assets de <code>/brand/*</code> desde este panel.
+                    </p>
+                  </SectionShell>
+                </>
               )}
 
               {section === 'notifications' && (
