@@ -24,8 +24,29 @@ const DB_KEYS = {
 const OWNER_USERNAME = 'nexura_owner';
 const OWNER_EMAIL = 'owner@nexura.live';
 
-/** Hash de la contraseña INICIAL del OWNER (no es la contraseña en texto plano). */
-const OWNER_INITIAL_PASSWORD_HASH = 'hashed_NktXcGxMTzBmZkBrZGlE';
+/**
+ * Hash de la contraseña INICIAL del OWNER (no es la contraseña en texto plano).
+ * Bootstrap por defecto para entornos locales/sin configuración. En
+ * producción este valor puede ser sobreescrito con una ENV VAR de BUILD
+ * (`VITE_OWNER_PASSWORD_HASH`, que contiene SOLO el hash, nunca la
+ * contraseña en claro) — ver docs/OWNER_SETUP.md.
+ */
+const OWNER_DEFAULT_PASSWORD_HASH = 'hashed_NktXcGxMTzBmZkBrZGlE';
+
+/**
+ * Resolución del hash de bootstrap del OWNER:
+ * 1. `import.meta.env.VITE_OWNER_PASSWORD_HASH` (hash provisto por el
+ *    entorno de build — Vercel lo inyecta al compilar; NO es un secreto
+ *    porque es solo un hash y se usa únicamente como semilla inicial).
+ * 2. Fallback al hash default embebido (desarrollo local).
+ */
+function getOwnerBootstrapHash(): string {
+  const env = (import.meta as any)?.env ?? {};
+  const fromEnv = typeof env.VITE_OWNER_PASSWORD_HASH === 'string'
+    ? env.VITE_OWNER_PASSWORD_HASH.trim()
+    : '';
+  return fromEnv || OWNER_DEFAULT_PASSWORD_HASH;
+}
 
 /** Clave de versionado del bootstrap del OWNER (permite rotaciones futuras). */
 const OWNER_PROVISION_VERSION_KEY = 'nexura_owner_provision_v1';
@@ -388,7 +409,7 @@ export function provisionOwner(): User | null {
     id: uuidv4(),
     username: OWNER_USERNAME,
     email: OWNER_EMAIL,
-    passwordHash: OWNER_INITIAL_PASSWORD_HASH,
+    passwordHash: getOwnerBootstrapHash(),
     displayName: 'NEXURA Owner',
     bio: 'Propietario de la plataforma NEXURA.',
     avatarUrl: '',
