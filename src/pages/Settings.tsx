@@ -297,13 +297,24 @@ function SecuritySettings({ user, addToast }: any) {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      addToast('success', 'Contraseña actualizada correctamente.');
+    try {
+      // Cambio real y persistente de contraseña. El rol del usuario
+      // (incluido OWNER) se conserva intacto; solo se actualiza el hash.
+      db.changeUserPassword(user.id, currentPassword, newPassword);
+      addToast('success', 'Contraseña actualizada correctamente. Tu rol se mantiene sin cambios. Debes iniciar sesión nuevamente.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    }, 1000);
+    } catch (err: any) {
+      const msg = err?.message === 'INVALID_CREDENTIALS'
+        ? 'La contraseña actual es incorrecta.'
+        : err?.message === 'PASSWORD_TOO_SHORT'
+          ? 'La nueva contraseña debe tener al menos 8 caracteres.'
+          : 'No se pudo actualizar la contraseña.';
+      addToast('error', msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogoutAll = () => {
