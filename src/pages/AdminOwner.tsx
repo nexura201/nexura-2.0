@@ -214,8 +214,14 @@ export function OwnerPage() {
       addToast('error', 'No se puede modificar el rol del OWNER.');
       return;
     }
+    if (newRole === 'OWNER') {
+      addToast('error', 'El rol OWNER está reservado para el propietario de la plataforma.');
+      return;
+    }
     try {
-      db.updateUser(targetId, { role: newRole });
+      // Nota: db.updateUser protege el campo `role` por seguridad; el
+      // cambio de rol de staff se aplica mediante setUserRole.
+      db.setUserRole(targetId, newRole);
       db.createAuditLog(user.id, 'ROLE_CHANGED', 'user', targetId, `Rol cambiado a ${newRole}`);
       addToast('success', `Rol cambiado a ${newRole}.`);
     } catch (err: any) {
