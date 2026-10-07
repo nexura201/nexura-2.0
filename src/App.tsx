@@ -67,6 +67,7 @@ import { SearchPage } from './pages/SearchPage';
 import { CategoryPage } from './pages/CategoryPage';
 import { VideoPage } from './pages/VideoPage';
 import { ClipPage } from './pages/ClipPage';
+import { ReelsPage } from './pages/ReelsPage';
 import { StreamConfigPage } from './pages/StreamConfig';
 import { StreamTestPage } from './pages/StreamTest';
 import { MonetizationDashboard } from './pages/MonetizationDashboard';
@@ -122,6 +123,7 @@ function AppRoutes() {
       <Route path="/channel/:username" element={<Layout><ChannelPage /></Layout>} />
       <Route path="/video/:id" element={<Layout><VideoPage /></Layout>} />
       <Route path="/clip/:id" element={<Layout><ClipPage /></Layout>} />
+      <Route path="/reels" element={<Layout><ReelsPage /></Layout>} />
       
       {/* Rutas legales */}
       <Route path="/terms" element={<Layout><TermsPage /></Layout>} />

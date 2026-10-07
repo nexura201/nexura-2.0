@@ -691,3 +691,23 @@ export type ExtendedReportReason = ReportReason |
   'PRIVATE_INFORMATION';
 
 export type ExtendedReportStatus = ReportStatus | 'ESCALATED';
+
+// ============ REELS ============
+export type ReelStatus = 'PROCESSING' | 'READY' | 'FAILED' | 'PRIVATE' | 'DELETED';
+
+export interface Reel {
+  id: string;
+  channelId: string;
+  title: string;
+  description: string;
+  status: ReelStatus;
+  videoUrl: string;
+  thumbnailUrl: string;
+  storageKey: string;
+  duration: number; // segundos
+  views: number;
+  likes: number;
+  likedBy: string[]; // userIds que le dieron me gusta
+  createdAt: string;
+  updatedAt: string;
+}
