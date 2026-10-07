@@ -61,7 +61,7 @@ import { ProfilePage, ChannelPage } from './pages/ProfileChannel';
 import { DashboardPage } from './pages/DashboardPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { SettingsPage } from './pages/Settings';
-import { AdminPage, OwnerPage } from './pages/AdminOwner';
+import { AdminPage } from './pages/AdminOwner';
 import { ExplorePage, FollowingPage, CategoriesPage, LibraryPage } from './pages/NavigationPages';
 import { SearchPage } from './pages/SearchPage';
 import { CategoryPage } from './pages/CategoryPage';
@@ -85,6 +85,11 @@ import { ContentPolicyPage } from './pages/ContentPolicyPage';
 import { SupportPage } from './pages/SupportPage';
 import { MyTicketsPage, TicketDetailPage } from './pages/SupportTickets';
 import { SupportAdminPage } from './pages/SupportAdmin';
+import { OwnerLayout } from './pages/owner/OwnerLayout';
+import { OwnerDashboardPage } from './pages/owner/OwnerDashboard';
+import { OwnerUsersPage, OwnerUserDetailPage } from './pages/owner/OwnerUsersPage';
+import { OwnerChannelsPage, OwnerLivesPage, OwnerReelsPage, OwnerCalendarPage } from './pages/owner/OwnerContentPages';
+import { OwnerSettingsPage, OwnerSecurityPage, OwnerActivityPage } from './pages/owner/OwnerSettingsPage';
 import { StatusPage } from './pages/StatusPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
@@ -105,6 +110,47 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
+}
+
+// Gate exclusivo del Control Center OWNER (usa el MISMO sistema de autenticación/roles existente).
+function OwnerRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-deep">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'OWNER') {
+    return (
+      <div className="min-h-screen bg-surface-deep flex items-center justify-center p-4">
+        <div className="bg-bg-card border border-border rounded-xl p-10 text-center max-w-md">
+          <p className="text-text-secondary">Solo el propietario de la plataforma puede acceder al Control Center.</p>
+        </div>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
+// Placeholder profesional para secciones en preparación (sin funcionalidad falsa).
+function OwnerComingSoon({ title }: { title: string }) {
+  return (
+    <OwnerLayout title={title}>
+      <div className="bg-bg-card border border-border rounded-2xl p-10 sm:p-14 text-center">
+        <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-primary/10 flex items-center justify-center">
+          <svg className="w-7 h-7 text-primary-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+        </div>
+        <h2 className="text-lg font-bold text-white mb-2">Esta sección se encuentra en preparación.</h2>
+        <p className="text-sm text-text-secondary max-w-md mx-auto leading-relaxed">
+          La navegación y la estructura del panel ya están conectadas. La funcionalidad real de «{title}»
+          se implementará en una próxima etapa, sin estados simulados ni datos inventados.
+        </p>
+      </div>
+    </OwnerLayout>
+  );
 }
 
 function AppRoutes() {
@@ -154,10 +200,23 @@ function AppRoutes() {
       {/* Rutas administrativas */}
       <Route path="/admin" element={<ProtectedRoute><Layout><AdminPage /></Layout></ProtectedRoute>} />
       <Route path="/admin/security" element={<ProtectedRoute><Layout><SecurityDashboardPage /></Layout></ProtectedRoute>} />
-      <Route path="/owner" element={<ProtectedRoute><Layout><OwnerPage /></Layout></ProtectedRoute>} />
-      <Route path="/owner/support" element={<ProtectedRoute><Layout><SupportAdminPage /></Layout></ProtectedRoute>} />
-      <Route path="/owner/infrastructure" element={<ProtectedRoute><Layout><InfrastructureDashboardPage /></Layout></ProtectedRoute>} />
-      <Route path="/owner/infrastructure/queues" element={<ProtectedRoute><Layout><QueueDashboardPage /></Layout></ProtectedRoute>} />
+
+      {/* Control Center OWNER 2.0 — sidebar exclusivo, gate con la auth existente */}
+      <Route path="/owner" element={<OwnerRoute><OwnerDashboardPage /></OwnerRoute>} />
+      <Route path="/owner/users" element={<OwnerRoute><OwnerUsersPage /></OwnerRoute>} />
+      <Route path="/owner/users/:id" element={<OwnerRoute><OwnerUserDetailPage /></OwnerRoute>} />
+      <Route path="/owner/channels" element={<OwnerRoute><OwnerChannelsPage /></OwnerRoute>} />
+      <Route path="/owner/lives" element={<OwnerRoute><OwnerLivesPage /></OwnerRoute>} />
+      <Route path="/owner/reels" element={<OwnerRoute><OwnerReelsPage /></OwnerRoute>} />
+      <Route path="/owner/calendar" element={<OwnerRoute><OwnerCalendarPage /></OwnerRoute>} />
+      <Route path="/owner/support" element={<OwnerRoute><SupportAdminPage /></OwnerRoute>} />
+      <Route path="/owner/settings" element={<OwnerRoute><OwnerSettingsPage /></OwnerRoute>} />
+      <Route path="/owner/security" element={<OwnerRoute><OwnerSecurityPage /></OwnerRoute>} />
+      <Route path="/owner/activity" element={<OwnerRoute><OwnerActivityPage /></OwnerRoute>} />
+      <Route path="/owner/infrastructure" element={<OwnerRoute><InfrastructureDashboardPage /></OwnerRoute>} />
+      <Route path="/owner/infrastructure/queues" element={<OwnerRoute><QueueDashboardPage /></OwnerRoute>} />
+      {/* Secciones estructurales en preparación (sin funcionalidad simulada) */}
+      <Route path="/owner/servers" element={<OwnerRoute><OwnerComingSoon title="Servidores" /></OwnerRoute>} />
       
       {/* Páginas de error */}
       <Route path="/401" element={<UnauthorizedPage />} />

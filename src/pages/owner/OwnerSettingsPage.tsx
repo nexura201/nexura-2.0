@@ -16,8 +16,8 @@ import { ReportService } from '../../services/report.service';
 import * as db from '../../services/database';
 import type { AuditLog } from '../../types';
 import {
-  Settings2, Users, Video, Radio, Film, MessageSquare, CreditCard, Shield,
-  Palette, Bell, Server, Download, Search, Wrench, CheckCircle2, AlertTriangle,
+  Settings2, Users, Video, Radio, MessageSquare, CreditCard, Shield,
+  Palette, Bell, Server, Download, Search, Wrench, CheckCircle2, AlertTriangle, Activity,
 } from 'lucide-react';
 
 const fmt = (iso: string | null | undefined) => {
@@ -30,19 +30,18 @@ const fmt = (iso: string | null | undefined) => {
 // SUBSECCIONES
 // ============================================================
 
-type SectionId = 'general' | 'users' | 'channels' | 'lives' | 'reels' | 'chat' | 'payments' | 'security' | 'design' | 'notifications' | 'system';
+type SectionId = 'general' | 'users' | 'content' | 'streaming' | 'community' | 'notifications' | 'monetization' | 'ia' | 'appearance' | 'system';
 
 const SECTIONS: { id: SectionId; label: string; icon: React.ElementType }[] = [
   { id: 'general', label: 'General', icon: Settings2 },
   { id: 'users', label: 'Usuarios', icon: Users },
-  { id: 'channels', label: 'Canales', icon: Video },
-  { id: 'lives', label: 'Lives', icon: Radio },
-  { id: 'reels', label: 'Reels', icon: Film },
-  { id: 'chat', label: 'Chat', icon: MessageSquare },
-  { id: 'payments', label: 'Pagos', icon: CreditCard },
-  { id: 'security', label: 'Seguridad', icon: Shield },
-  { id: 'design', label: 'Diseño', icon: Palette },
+  { id: 'content', label: 'Contenido', icon: Video },
+  { id: 'streaming', label: 'Streaming', icon: Radio },
+  { id: 'community', label: 'Comunidad', icon: MessageSquare },
   { id: 'notifications', label: 'Notificaciones', icon: Bell },
+  { id: 'monetization', label: 'Monetización', icon: CreditCard },
+  { id: 'ia', label: 'NEXURA IA', icon: Activity },
+  { id: 'appearance', label: 'Apariencia', icon: Palette },
   { id: 'system', label: 'Sistema', icon: Server },
 ];
 
@@ -239,13 +238,25 @@ export function OwnerSettingsPage() {
                 </SectionShell>
               )}
 
-              {section === 'channels' && (
-                <SectionShell title="Canales">
-                  <Row label="Listado real de canales" badge={<FeatureBadge kind="ok" />}>
+              {section === 'content' && (
+                <SectionShell title="Contenido">
+                  <Row label="Canales — listado real" badge={<FeatureBadge kind="ok" />}>
                     <Link to="/owner/channels" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
                   </Row>
+                  <Row label="Lives — estado real de transmisiones" badge={<FeatureBadge kind="ok" />}>
+                    <Link to="/owner/lives" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
+                  </Row>
+                  <Row label="Reels — listado real (views, likes, duración)" badge={<FeatureBadge kind="ok" />}>
+                    <Link to="/owner/reels" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
+                  </Row>
+                  <Row label="Calendario de emisiones" badge={<FeatureBadge kind="ok" />}>
+                    <Link to="/owner/calendar" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
+                  </Row>
+                  <Row label="Reportes de contenido (cola de moderación)" badge={<FeatureBadge kind="ok" note="ReportService existente" />}>
+                    <Link to="/moderation/reports" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
+                  </Row>
                   <div>
-                    <p className="text-xs text-text-muted mb-2">
+                    <p className="text-xs text-text-muted mb-2 mt-2">
                       Categorías del catálogo — desactivar oculta la categoría del público (reversible, no borra contenido):
                     </p>
                     <CategoryToggles ownerId={user?.id ?? null} onToast={m => setToast(m)} />
@@ -255,72 +266,74 @@ export function OwnerSettingsPage() {
                     badge={<FeatureBadge kind="ok" note="Regla vigente en database.ts" />}
                     note="El sistema local permite un canal por usuario. Cambiar ese límite es un cambio de código validado en servidor cuando exista backend."
                   />
-                </SectionShell>
-              )}
-
-              {section === 'lives' && (
-                <SectionShell title="Lives">
-                  <Row label="Estado real de transmisiones (activos, viewers, picos)" badge={<FeatureBadge kind="ok" />}>
-                    <Link to="/owner/lives" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
-                  </Row>
-                  <Row label="Duración máxima de live / corte forzado" badge={<FeatureBadge kind="backend" />} note="Requiere control del media server (RTMP/HLS) desde el servidor." />
-                  <Row label="Calidad máxima de transmisión" badge={<FeatureBadge kind="backend" />} note="Configurable en el media server cuando esté operativo." />
-                  <Row label="Moderación automática de chat en vivo" badge={<FeatureBadge kind="backend" />} note="Necesita procesamiento server-side del flujo de mensajes." />
-                </SectionShell>
-              )}
-
-              {section === 'reels' && (
-                <SectionShell title="Reels">
-                  <Row label="Listado real de reels (views, likes, duración)" badge={<FeatureBadge kind="ok" />}>
-                    <Link to="/owner/reels" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
-                  </Row>
-                  <Row
-                    label="Duración máxima de reel"
-                    badge={<FeatureBadge kind="ok" note="Regla vigente en ReelService" />}
-                    note="El límite actual está definido en el servicio de reels; modificarlo como flag dinámico requiere backend."
-                  />
                   <Row label="Transcodificación / compresión de video" badge={<FeatureBadge kind="backend" />} note="Requiere pipeline de transcoding server-side." />
                 </SectionShell>
               )}
 
-              {section === 'chat' && (
-                <SectionShell title="Chat">
-                  <Row label="Filtrado automático de lenguaje ofensivo" badge={<FeatureBadge kind="backend" />} note="Requiere servicio de moderación de texto en servidor." />
-                  <Row label="Modo lento (slow mode)" badge={<FeatureBadge kind="backend" />} note="Rate limiting real exige servidor de chat." />
-                  <Row label="Límite de caracteres por mensaje" badge={<FeatureBadge kind="backend" />} note="Validación server-side pendiente." />
+              {section === 'streaming' && (
+                <SectionShell title="Streaming">
+                  <Row label="Infraestructura: servidores, colas y estado" badge={<FeatureBadge kind="ok" note="Vistas existentes del panel" />}>
+                    <Link to="/owner/infrastructure" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
+                  </Row>
+                  <Row label="Colas de streaming" badge={<FeatureBadge kind="ok" />}>
+                    <Link to="/owner/infrastructure/queues" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
+                  </Row>
+                  <Row label="Capacidad asignable por servidor" badge={<FeatureBadge kind="backend" />} note="La capacidad real depende del media server (RTMP/HLS); hoy no hay backend de streaming que la administre." />
+                  <Row label="Duración máxima de live / corte forzado" badge={<FeatureBadge kind="backend" />} note="Requiere control del media server desde el servidor." />
+                  <Row label="Calidad máxima de transmisión" badge={<FeatureBadge kind="backend" />} note="Configurable en el media server cuando esté operativo." />
+                </SectionShell>
+              )}
+
+              {section === 'community' && (
+                <SectionShell title="Comunidad">
+                  <Row label="Seguimientos" badge={<FeatureBadge kind="ok" note="Sistema real de follows en la app" />} note="Los usuarios pueden seguir canales; la gestión masiva desde el panel requiere backend." />
+                  <Row label="Moderación de reportes" badge={<FeatureBadge kind="ok" />}>
+                    <Link to="/moderation/reports" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
+                  </Row>
+                  <Row label="Comentarios" badge={<FeatureBadge kind="backend" />} note="La moderación de comentarios a escala requiere validación y persistencia server-side." />
+                  <Row label="Chat — filtrado automático de lenguaje ofensivo" badge={<FeatureBadge kind="backend" />} note="Requiere servicio de moderación de texto en servidor." />
+                  <Row label="Chat — modo lento (slow mode)" badge={<FeatureBadge kind="backend" />} note="Rate limiting real exige servidor de chat." />
+                  <Row label="Chat — límite de caracteres por mensaje" badge={<FeatureBadge kind="backend" />} note="Validación server-side pendiente." />
                   <Row label="Emojis personalizados" badge={<FeatureBadge kind="soon" />} note="Requiere storage + CDN." />
                 </SectionShell>
               )}
 
-              {section === 'payments' && (
-                <SectionShell title="Pagos">
-                  <Row label="Monetización / suscripciones / bits" badge={<FeatureBadge kind="backend" />} note="Integración con pasarela real (Stripe/MercadoPago) y webhooks server-side. Las claves privadas NUNCA se configuran desde el navegador." />
-                  <Row label="Métodos de pago disponibles" badge={<FeatureBadge kind="soon" />} note="Dependen de la pasarela contratada." />
-                  <Row label="Comisión de la plataforma" badge={<FeatureBadge kind="backend" />} note="Debe definirse en el proveedor de pagos, no en cliente." />
+              {section === 'monetization' && (
+                <SectionShell title="Monetización">
+                  <BackendNotice>
+                    Requiere configuración de pagos. No existe backend de pasarela todavía: esta sección documenta la
+                    estructura preparada para la integración futura. <strong className="text-white">No se simulan cobros ni payouts.</strong>
+                  </BackendNotice>
+                  <Row label="Suscripciones" badge={<FeatureBadge kind="backend" />} note="Requiere pasarela real + webhooks server-side." />
+                  <Row label="Donaciones" badge={<FeatureBadge kind="backend" />} note="Requiere pasarela real + verificación de identidad del destinatario en servidor." />
+                  <Row label="Comisiones de la plataforma" badge={<FeatureBadge kind="backend" />} note="Debe definirse en el proveedor de pagos, nunca en el cliente." />
+                  <Row label="PayPal" badge={<FeatureBadge kind="backend" />} note="Integración server-side con credenciales guardadas SOLO en el servidor (jamás en el frontend ni en localStorage)." />
+                  <Row label="Mercado Pago" badge={<FeatureBadge kind="backend" />} note="Ídem: access tokens privativos excluidos por diseño del navegador." />
                 </SectionShell>
               )}
 
-              {section === 'security' && (
-                <SectionShell title="Seguridad">
-                  <Row label="Centro de seguridad (cambio de contraseña propio, sesiones, actividad)" badge={<FeatureBadge kind="ok" />}>
-                    <Link to="/owner/security" className="text-sm text-primary-hover hover:underline">Abrir →</Link>
-                  </Row>
-                  <Row label="Auditoría de acciones administrativas" badge={<FeatureBadge kind="ok" note="Registro compartido createAuditLog" />}>
-                    <Link to="/owner/activity" className="text-sm text-primary-hover hover:underline">Ver →</Link>
-                  </Row>
-                  <Row label="Bloqueo de IP / geo-restricciones" badge={<FeatureBadge kind="backend" />} note="Requiere infraestructura de red en servidor." />
-                  <Row label="Alertas ante intentos de acceso sospechosos" badge={<FeatureBadge kind="backend" />} note="Requiere telemetría de autenticación server-side." />
+              {section === 'ia' && (
+                <SectionShell title="NEXURA IA">
+                  <Row label="Estado" badge={<FeatureBadge kind="soon" />} note="Asistente presente en la interfaz pública (Explorar); sin modelo server-side conectado todavía." />
+                  <Row label="Funciones disponibles hoy" badge={<FeatureBadge kind="ok" note="Solo UI" />} note="Sugerencias de descubrimiento basadas en datos locales del catálogo. No hay generación IA real." />
+                  <Row label="Configuración de proveedor IA (API keys)" badge={<FeatureBadge kind="backend" />} note="Las claves de cualquier proveedor de IA deben vivir exclusivamente en el servidor. Por regla de seguridad NO se ofrece un campo para pegar secretos en el navegador." />
+                  <Row label="Moderación asistida por IA" badge={<FeatureBadge kind="backend" />} note="Requiere procesamiento server-side sobre el flujo de contenido." />
                 </SectionShell>
               )}
 
-              {section === 'design' && (
-                <SectionShell title="Diseño">
+              {section === 'appearance' && (
+                <SectionShell title="Apariencia">
                   <p className="text-sm text-text-secondary leading-relaxed">
                     La identidad visual de NEXURA (logo oficial y paleta azul marino + azul eléctrico) está centralizada
-                    en los tokens de <code className="text-primary-hover">src/index.css</code> y <strong className="text-white">no se edita desde este panel</strong>.
-                    Un sistema de temas editable en runtime requeriría persistencia server-side y aprobación de marca
-                    (⚠️ fuera del alcance actual por decisión de producto).
+                    en los assets <code className="text-primary-hover">/brand/*</code> y los tokens de{' '}
+                    <code className="text-primary-hover">src/index.css</code>, y <strong className="text-white">no se modifica desde este panel</strong>.
+                    Preparación para administración futura de logo, favicon, nombre y elementos visuales:
                   </p>
+                  <Row label="Nombre visible de la plataforma" badge={<FeatureBadge kind="ok" />} note="Se administra en General → Nombre de la plataforma.">
+                    <button onClick={() => setSection('general')} className="text-sm text-primary-hover hover:underline">Ir →</button>
+                  </Row>
+                  <Row label="Logo / favicon" badge={<FeatureBadge kind="backend" />} note="Reemplazar assets exige despliegue controlado (storage + revisión de marca). No se permite subir logos desde el cliente." />
+                  <Row label="Temas / paletas personalizables" badge={<FeatureBadge kind="soon" />} note="Fuera de alcance actual: la paleta oficial no se edita." />
                   <Row label="Ocultar sección “Explorar”" badge={<FeatureBadge kind="backend" />} note="Las flags de visibilidad deben aplicarse en servidor para ser consistentes entre dispositivos." />
                   <Row label="Cambiar orden de navegación" badge={<FeatureBadge kind="backend" />} note="Ídem: requiere persistencia server-side de preferencias." />
                 </SectionShell>
