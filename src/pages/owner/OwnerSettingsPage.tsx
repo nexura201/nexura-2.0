@@ -22,12 +22,21 @@ import {
 } from '../../services/streamingSettings.service';
 import { getAllCategories } from '../../services/category';
 import { ReportService } from '../../services/report.service';
+import {
+  getNexuraIAStatus,
+  type NexuraIAConnectionState,
+} from '../../services/nexuraIA.service';
+import {
+  NEXURA_IA_BEHAVIORS,
+  NEXURA_IA_DEFAULTS,
+  type NexuraIaBehaviorId,
+} from '../../config/nexuraIA.context';
 import * as db from '../../services/database';
 import type { AuditLog } from '../../types';
 import {
   Settings2, Users, Video, Radio, MessageSquare, CreditCard, Shield,
   Palette, Bell, Server, Download, Search, Wrench, CheckCircle2, AlertTriangle, Activity,
-  Lock, ShieldCheck, Image as ImageIcon, Code2, Star, Globe, Type, Shapes,
+  Lock, ShieldCheck, Image as ImageIcon, Code2, Star, Globe, Type, Shapes, Loader2,
 } from 'lucide-react';
 
 const fmt = (iso: string | null | undefined) => {
@@ -313,12 +322,7 @@ export function OwnerSettingsPage() {
               )}
 
               {section === 'ia' && (
-                <SectionShell title="NEXURA IA">
-                  <Row label="Estado" badge={<FeatureBadge kind="soon" />} note="Asistente presente en la interfaz pública (Explorar); sin modelo server-side conectado todavía." />
-                  <Row label="Funciones disponibles hoy" badge={<FeatureBadge kind="ok" note="Solo UI" />} note="Sugerencias de descubrimiento basadas en datos locales del catálogo. No hay generación IA real." />
-                  <Row label="Configuración de proveedor IA (API keys)" badge={<FeatureBadge kind="backend" />} note="Las claves de cualquier proveedor de IA deben vivir exclusivamente en el servidor. Por regla de seguridad NO se ofrece un campo para pegar secretos en el navegador." />
-                  <Row label="Moderación asistida por IA" badge={<FeatureBadge kind="backend" />} note="Requiere procesamiento server-side sobre el flujo de contenido." />
-                </SectionShell>
+                <NexuraIASettingsSection onToast={m => setToast(m)} />
               )}
 
               {section === 'appearance' && (
@@ -691,6 +695,222 @@ function PendingBackendTag({ label }: { label: string }) {
     <span className="inline-flex items-center gap-1 text-[11px] font-semibold border rounded-full px-2 py-0.5 bg-warning/10 text-warning border-warning/30">
       <AlertTriangle className="w-3 h-3" /> {label}
     </span>
+  );
+}
+
+// ============================================================
+// CONFIGURACIÓN DE NEXURA IA (Fase 6 — sección existente 'ia')
+// ============================================================
+
+const NEXURA_IA_BEHAVIOR_STORAGE_KEY = 'nexura_ia_behavior'; // Solo preferencia de comportamiento: NUNCA secretos.
+
+const CONNECTION_STATE_UI: Record<NexuraIAConnectionState, { label: string; cls: string; dot: string }> = {
+  connected: { label: 'Gemini conectado', cls: 'text-success border-success/40 bg-success/10', dot: 'bg-success' },
+  'not-configured': { label: 'Gemini no configurado', cls: 'text-warning border-warning/40 bg-warning/10', dot: 'bg-warning' },
+  error: { label: 'Error de conexión', cls: 'text-danger border-danger/40 bg-danger/10', dot: 'bg-danger' },
+  unknown: { label: 'Estado desconocido', cls: 'text-text-muted border-border bg-bg-elevated', dot: 'bg-text-muted' },
+};
+
+function NexuraIASettingsSection({ onToast }: { onToast: (m: string) => void }) {
+  const [state, setState] = useState<NexuraIAConnectionState>('unknown');
+  const [model, setModel] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [behavior, setBehavior] = useState<NexuraIaBehaviorId>(() => {
+    try {
+      const v = localStorage.getItem(NEXURA_IA_BEHAVIOR_STORAGE_KEY);
+      if (v === 'concisa' || v === 'equilibrada' || v === 'detallada') return v;
+    } catch { /* almacenamiento no disponible */ }
+    return NEXURA_IA_DEFAULTS.behavior;
+  });
+
+  const checkConnection = async () => {
+    setChecking(true);
+    const result = await getNexuraIAStatus();
+    setState(result.state);
+    setModel(result.status?.model ?? null);
+    setChecking(false);
+  };
+
+  useEffect(() => {
+    void checkConnection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const saveBehavior = (b: NexuraIaBehaviorId) => {
+    setBehavior(b);
+    try {
+      localStorage.setItem(NEXURA_IA_BEHAVIOR_STORAGE_KEY, b);
+    } catch { /* sin persistencia disponible */ }
+    onToast(`Comportamiento "${NEXURA_IA_BEHAVIORS[b].label}" guardado en este navegador.`);
+  };
+
+  const stateUi = CONNECTION_STATE_UI[state];
+
+  return (
+    <>
+      <SectionShell title="NEXURA IA">
+        {/* Estado de conexión — verificación REAL contra GET /api/ai/status (sin exponer secretos) */}
+        <div className="flex items-start justify-between gap-4 py-2 border-b border-border">
+          <div className="min-w-0">
+            <p className="text-sm text-white flex items-center gap-2 flex-wrap">
+              Estado de conexión
+              <FeatureBadge kind="ok" note="Verificación real del backend vía /api/ai/status" />
+            </p>
+            <p className="text-xs text-text-muted mt-0.5">
+              Se comprueba consultando el endpoint seguro del servidor. El estado nunca se inventa: si la función no está desplegada o hay un error, se muestra tal cual.
+            </p>
+          </div>
+          <div className="shrink-0 flex flex-col items-end gap-2">
+            <span className={`inline-flex items-center gap-2 text-xs font-semibold border rounded-full px-3 py-1 ${stateUi.cls}`}>
+              <span className={`w-2 h-2 rounded-full ${stateUi.dot} ${state === 'connected' ? 'animate-pulse' : ''}`} />
+              {stateUi.label}
+            </span>
+            <button
+              type="button"
+              onClick={() => void checkConnection()}
+              disabled={checking}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-hover hover:underline disabled:opacity-50"
+            >
+              {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+              Verificar de nuevo
+            </button>
+          </div>
+        </div>
+
+        {state === 'not-configured' && (
+          <BackendNotice>
+            El servidor respondió correctamente pero <strong className="text-white">GEMINI_API_KEY no está definida</strong> en el entorno de Vercel. Configurala en Project → Settings → Environment Variables (sin prefijo VITE_) y volvé a verificar.
+          </BackendNotice>
+        )}
+        {state === 'error' && (
+          <BackendNotice>
+            El endpoint <code className="text-white">/api/ai/status</code> no devolvió una respuesta válida. Suele significar que las funciones serverless todavía <strong className="text-white">no fueron desplegadas</strong> en este entorno.
+          </BackendNotice>
+        )}
+        {state === 'unknown' && (
+          <BackendNotice>
+            No se pudo contactar al servidor (fallo de red). El estado real es <strong className="text-white">desconocido</strong>: no se muestra como conectado ni como error hasta poder verificarlo.
+          </BackendNotice>
+        )}
+
+        {/* Modelo real reportado por el backend */}
+        <Row
+          label="Modelo configurado"
+          badge={<FeatureBadge kind="ok" note="Valor leído del servidor (process.env.GEMINI_MODEL)" />}
+          note="Se lee del backend (variable de entorno GEMINI_MODEL; default gemini-2.5-flash). Cambiarlo requiere editar el entorno del servidor, no este panel."
+        >
+          <span className="text-sm font-mono text-primary-hover">{model || '—'}</span>
+        </Row>
+
+        {/* Comportamiento */}
+        <div className="py-2 border-b border-border last:border-0">
+          <p className="text-sm text-white flex items-center gap-2 flex-wrap mb-1">
+            Comportamiento de respuesta
+            <FeatureBadge kind="backend" note="Preparado — la selección se guarda en este navegador; el valor autoritativo lo define el servidor (NEXURA_IA_BEHAVIOR)." />
+          </p>
+          <p className="text-xs text-text-muted mb-3">
+            Conciso: respuestas breves · Equilibrado: proporcional a la pregunta · Detallado: explicaciones completas. El backend aplica estos parámetros reales (temperatura y longitud máxima) cuando el chat los envía; la preferencia guardada aquí se aplica a este navegador.
+          </p>
+          <div className="grid sm:grid-cols-3 gap-2">
+            {(Object.keys(NEXURA_IA_BEHAVIORS) as NexuraIaBehaviorId[]).map((id) => {
+              const b = NEXURA_IA_BEHAVIORS[id];
+              const active = behavior === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => saveBehavior(id)}
+                  aria-pressed={active}
+                  className={`rounded-xl border p-3 text-left transition-colors ${
+                    active
+                      ? 'border-primary bg-primary/15 text-white'
+                      : 'border-border bg-bg-elevated text-text-secondary hover:text-white hover:border-primary/40'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-semibold">
+                    {active && <CheckCircle2 className="w-4 h-4 text-primary-hover" />}
+                    {b.label}
+                  </span>
+                  <span className="block text-[11px] text-text-muted mt-1 leading-relaxed">{b.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Idioma */}
+        <Row
+          label="Idioma principal"
+          badge={<FeatureBadge kind="ok" note="Español definido en el contexto oficial (src/config/nexuraIA.context.ts)" />}
+          note="Español como idioma principal; NEXURA IA responde en el idioma del usuario si escribe en otro."
+        >
+          <span className="text-sm text-white">Español</span>
+        </Row>
+        <Row
+          label="Otros idiomas (selección explícita)"
+          badge={<FeatureBadge kind="backend" />}
+          note="Preparado — requiere backend: configuración de idioma por plataforma todavía no se aplica desde el servidor."
+        />
+      </SectionShell>
+
+      <SectionShell title="Límites y estado general">
+        <Row
+          label="Longitud máxima de mensaje"
+          badge={<FeatureBadge kind="ok" note="Validación real en api/ai/chat.ts y en el cliente" />}
+          note={`${NEXURA_IA_DEFAULTS.maxMessageLength.toLocaleString('es')} caracteres. La validación existe en el backend; modificar el valor requiere cambiar el código del servidor.`}
+        />
+        <Row
+          label="Longitud máxima de respuesta"
+          badge={<FeatureBadge kind="ok" note="Aplicada por el backend según el comportamiento" />}
+          note="Se aplica realmente en el servidor según el comportamiento activo (1.024 / 2.048 / 4.096 tokens de salida)."
+        />
+        <Row
+          label="Límite de solicitudes (rate limiting)"
+          badge={<FeatureBadge kind="backend" />}
+          note="Configuración preparada — aplicación backend pendiente. Hoy no existe límite de requests por usuario en el serverless."
+        />
+        <Row
+          label="Activar / desactivar NEXURA IA"
+          badge={<FeatureBadge kind="backend" />}
+          note="Preparado — requiere backend: un interruptor real debe aplicarse en el servidor (las funciones serverless no comparten estado con este panel local). No se simula un toggle que no corte la conexión."
+        />
+      </SectionShell>
+
+      <SectionShell title="Información y seguridad">
+        <div className="flex items-start gap-3 bg-bg-elevated border border-border rounded-xl p-4">
+          <ShieldCheck className="w-5 h-5 text-success mt-0.5 shrink-0" />
+          <p className="text-sm text-text-secondary leading-relaxed">
+            NEXURA IA utiliza <strong className="text-white">Google Gemini</strong> mediante una{' '}
+            <strong className="text-white">conexión segura del servidor</strong>. La API key vive exclusivamente
+            en el entorno de Vercel (<code className="text-primary-hover">process.env.GEMINI_API_KEY</code>):
+            nunca se muestra en este panel, nunca se envía al navegador y nunca se guarda en localStorage.
+          </p>
+        </div>
+        <div className="flex items-start gap-3 bg-bg-elevated border border-border rounded-xl p-4">
+          <Lock className="w-5 h-5 text-primary-hover mt-0.5 shrink-0" />
+          <p className="text-sm text-text-secondary leading-relaxed">
+            NEXURA IA no ejecuta acciones administrativas: no crea lives, no modifica cuentas ni contenido.
+            Explica cómo hacer las cosas dentro de la plataforma. Las reglas de identidad, ayuda y seguridad
+            están centralizadas en <code className="text-primary-hover">src/config/nexuraIA.context.ts</code>.
+          </p>
+        </div>
+        <Row
+          label="Memoria de conversaciones / historial persistente"
+          badge={<FeatureBadge kind="backend" />}
+          note="Arquitectura preparada (el endpoint ya acepta historial opcional) — requiere base de datos. Cada conversación hoy empieza de cero."
+        />
+        <Row
+          label="Herramientas / acciones automáticas (tools)"
+          badge={<FeatureBadge kind="soon" />}
+          note="Etapa futura: permitir 'programame un live' con ejecución real. NO implementado; el asistente nunca afirma haber ejecutado algo."
+        />
+        <Row
+          label="Moderación asistida por IA"
+          badge={<FeatureBadge kind="backend" />}
+          note="Requiere procesamiento server-side sobre el flujo de contenido."
+        />
+      </SectionShell>
+    </>
   );
 }
 

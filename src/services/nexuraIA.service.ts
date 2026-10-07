@@ -3,9 +3,11 @@
  * ----------------------------------------------------------------
  * Conecta la interfaz de NEXURA IA con el endpoint serverless seguro:
  *
- *   POST /api/ai/chat   { message: string }
- *        → 200 { ok: true, reply, model, timestamp }
+ *   POST /api/ai/chat   { message: string, behavior?: NexuraIaBehaviorId }
+ *        → 200 { ok: true, reply, model, behavior, timestamp }
  *        → 4xx/5xx { ok: false, error: CODE }
+ *
+ *   GET  /api/ai/status → 200 { ok: true, configured, model }  (sin secretos)
  *
  * SEGURIDAD:
  *  - El frontend SOLO llama a /api/ai/chat. Jamás accede a Gemini directamente.
@@ -18,11 +20,28 @@
  * persistente, sin imágenes, sin voz, sin herramientas externas.
  */
 
+import {
+  NEXURA_IA_DEFAULTS,
+  type NexuraIaBehaviorId,
+} from '../config/nexuraIA.context';
+
 export interface NexuraIAChatResult {
   reply: string;
   model: string;
+  /** Comportamiento REAL aplicado por el backend (concisa | equilibrada | detallada). */
+  behavior?: NexuraIaBehaviorId;
   timestamp: string;
 }
+
+/** Estado público del servicio NEXURA IA (GET /api/ai/status — nunca contiene secretos). */
+export interface NexuraIAStatus {
+  /** true = endpoint accesible y Gemini configurado en el servidor. */
+  configured: boolean;
+  model: string;
+}
+
+/** Estado de conexión mostrado en el Control Center (nunca se inventa). */
+export type NexuraIAConnectionState = 'connected' | 'not-configured' | 'error' | 'unknown';
 
 /** Error público de NEXURA IA (código + mensaje amigable, nunca detalles internos). */
 export class NexuraIAError extends Error {
@@ -36,7 +55,8 @@ export class NexuraIAError extends Error {
 }
 
 const CHAT_ENDPOINT = '/api/ai/chat';
-const MAX_MESSAGE_LENGTH = 4000; // Coincide con la validación del backend.
+const STATUS_ENDPOINT = '/api/ai/status';
+const MAX_MESSAGE_LENGTH = NEXURA_IA_DEFAULTS.maxMessageLength; // Coincide con la validación del backend.
 
 /** Traducción de códigos de error del backend a mensajes amigables. */
 const FRIENDLY_ERRORS: Record<string, string> = {
@@ -60,7 +80,7 @@ export function friendlyErrorMessage(code: string): string {
  */
 export async function sendMessage(
   message: string,
-  opts: { signal?: AbortSignal } = {}
+  opts: { signal?: AbortSignal; behavior?: NexuraIaBehaviorId } = {}
 ): Promise<NexuraIAChatResult> {
   const trimmed = message.trim();
 
@@ -76,7 +96,7 @@ export async function sendMessage(
     res = await fetch(CHAT_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: trimmed }),
+      body: JSON.stringify({ message: trimmed, ...(opts.behavior ? { behavior: opts.behavior } : {}) }),
       signal: opts.signal,
     });
   } catch (err: unknown) {
@@ -84,7 +104,7 @@ export async function sendMessage(
     throw new NexuraIAError('NETWORK_ERROR', friendlyErrorMessage('NETWORK_ERROR'));
   }
 
-  let data: { ok?: boolean; reply?: string; model?: string; timestamp?: string; error?: string } = {};
+  let data: { ok?: boolean; reply?: string; model?: string; behavior?: string; timestamp?: string; error?: string } = {};
   try {
     data = await res.json();
   } catch {
@@ -103,9 +123,53 @@ export async function sendMessage(
   return {
     reply: data.reply,
     model: data.model ?? '',
+    behavior: isBehaviorId(data.behavior) ? data.behavior : undefined,
     timestamp: data.timestamp ?? new Date().toISOString(),
   };
 }
 
-export const NexuraIAService = { sendMessage, friendlyErrorMessage };
+function isBehaviorId(v: unknown): v is NexuraIaBehaviorId {
+  return v === 'concisa' || v === 'equilibrada' || v === 'detallada';
+}
+
+/**
+ * Consulta el estado REAL del servicio NEXURA IA en el backend (GET /api/ai/status).
+ * No envía ni recibe secretos: solo booleano `configured` + nombre público del modelo.
+ * - endpoint accesible y Gemini configurado → 'connected'
+ * - endpoint accesible pero sin GEMINI_API_KEY → 'not-configured'
+ * - HTTP error / respuesta no JSON → 'error'
+ * - fallo de red (fetch lanza) → 'unknown' (no se inventa el estado)
+ */
+export async function getNexuraIAStatus(opts: { signal?: AbortSignal } = {}): Promise<{
+  state: NexuraIAConnectionState;
+  status: NexuraIAStatus | null;
+}> {
+  let res: Response;
+  try {
+    res = await fetch(STATUS_ENDPOINT, { method: 'GET', signal: opts.signal });
+  } catch {
+    return { state: 'unknown', status: null };
+  }
+
+  if (!res.ok) return { state: 'error', status: null };
+
+  let data: { ok?: boolean; configured?: boolean; model?: string } = {};
+  try {
+    data = await res.json();
+  } catch {
+    // HTML (rewrite de SPA) u otra respuesta inesperada: la función no está desplegada.
+    return { state: 'error', status: null };
+  }
+
+  if (data.ok !== true || typeof data.configured !== 'boolean') {
+    return { state: 'error', status: null };
+  }
+
+  return {
+    state: data.configured ? 'connected' : 'not-configured',
+    status: { configured: data.configured, model: typeof data.model === 'string' ? data.model : '' },
+  };
+}
+
+export const NexuraIAService = { sendMessage, friendlyErrorMessage, getNexuraIAStatus };
 export default NexuraIAService;

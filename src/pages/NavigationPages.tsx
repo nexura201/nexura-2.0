@@ -13,7 +13,23 @@ import {
   Trophy, Cpu, Globe, Drama, Palette, UtensilsCrossed,
   Sparkles, X, ArrowRight, Video, Send, Loader2, AlertTriangle, RotateCcw, Bot
 } from 'lucide-react';
-import { sendMessage as nexuraIASendMessage, NexuraIAError } from '../services/nexuraIA.service';
+import {
+  sendMessage as nexuraIASendMessage,
+  NexuraIAError,
+} from '../services/nexuraIA.service';
+import type { NexuraIaBehaviorId } from '../config/nexuraIA.context';
+
+/** Clave local de la preferencia de comportamiento elegida en el Control Center.
+ *  NO contiene secretos: solo 'concisa' | 'equilibrada' | 'detallada'. */
+const NEXURA_IA_BEHAVIOR_STORAGE_KEY = 'nexura_ia_behavior';
+
+function readStoredNexuraIaBehavior(): NexuraIaBehaviorId | undefined {
+  try {
+    const v = localStorage.getItem(NEXURA_IA_BEHAVIOR_STORAGE_KEY);
+    if (v === 'concisa' || v === 'equilibrada' || v === 'detallada') return v;
+  } catch { /* almacenamiento no disponible */ }
+  return undefined;
+}
 
 /**
  * Mapeo de slug de categoría -> icono Lucide + acento visual.
@@ -304,6 +320,14 @@ interface NexuraIAChatMessage {
   text: string;
 }
 
+/** Sugerencias rápidas (Fase 8): al tocarlas se envían al mismo chat existente. */
+const NEXURA_IA_SUGGESTIONS = [
+  '¿Qué puedo hacer en NEXURA?',
+  '¿Cómo programo un live?',
+  '¿Cómo puedo mejorar mi stream?',
+  '¿Qué son los Reels?',
+] as const;
+
 function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
   const [messages, setMessages] = useState<NexuraIAChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -339,7 +363,7 @@ function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
     setSending(true);
 
     try {
-      const result = await nexuraIASendMessage(text);
+      const result = await nexuraIASendMessage(text, { behavior: readStoredNexuraIaBehavior() });
       setMessages(prev => [
         ...prev,
         { id: `a-${Date.now()}`, role: 'assistant', text: result.reply },
@@ -410,10 +434,24 @@ function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-primary/40 bg-primary/15 text-primary-hover">
                 <Sparkles className="h-6 w-6" />
               </div>
-              <p className="text-sm font-semibold text-white mb-1">Hola, soy NEXURA IA</p>
-              <p className="text-xs text-text-secondary max-w-sm">
-                Escribí un mensaje y te respondo a través del backend seguro de NEXURA.
+              <p className="text-sm font-semibold text-white mb-1">Hola, soy NEXURA IA 👋</p>
+              <p className="text-xs text-text-secondary max-w-sm mb-5">
+                Soy el asistente oficial de NEXURA. Puedo explicarte cómo funciona la plataforma,
+                ayudarte como creador y responder tus preguntas. Escribí un mensaje o probá con una sugerencia:
               </p>
+              <div className="flex flex-wrap justify-center gap-2 max-w-md">
+                {NEXURA_IA_SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => void handleSend(s)}
+                    disabled={sending}
+                    className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary-hover transition-colors hover:bg-primary/20 hover:border-primary/60 disabled:opacity-40"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
