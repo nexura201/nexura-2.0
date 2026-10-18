@@ -312,6 +312,14 @@ create policy "categories_select_public" on public.categories
   using (true);
 
 -- profiles: lectura pública de datos de perfil (necesaria para home/canales/perfil).
+-- PRIVACIDAD (fix5): `using (true)` es deliberado a nivel FILA — la visibilidad
+-- real la restringe el grant SELECT POR COLUMNA de §8b: solo las columnas
+-- públicas {id, username, display_name, bio, avatar_url, banner_url, created_at}
+-- son legibles vía API. Cualquier query (de anon O de un usuario autenticado,
+-- incluso sobre su propia fila) que mencione role/status/last_login_at/
+-- username_key falla con 42501 ANTES de evaluar esta policy. La policy no exige
+-- leer columnas ocultas: su expresión solo referencia `id` (columna pública y
+-- PK), por lo que sigue siendo evaluable bajo el grant reducido.
 create policy "profiles_select_public" on public.profiles
   for select to anon, authenticated
   using (true);
@@ -343,6 +351,16 @@ create policy "profiles_insert_self_new" on public.profiles
 -- El trigger §6 (SECURITY INVOKER) es la segunda capa: aunque una ruta
 -- administrativa llegara al UPDATE, exige current_user='postgres' para todo
 -- cambio de role/status. updated_at lo fija el propio trigger.
+-- PRIVACIDAD (fix5): las subconsultas de WITH CHECK leen role/status — columnas
+-- NO concedidas en SELECT a anon/authenticated (§8b). Esto NO rompe la policy:
+-- PostgreSQL chequea los privilegios de columna contra las columnas del
+-- resultado final de la sentencia (la lista SET), no contra las lecturas
+-- internas que realiza la evaluación de la policy sobre el snapshot visible al
+-- propio comando UPDATE (cuyo objetivo ya fue validado por USING + grant
+-- UPDATE). Análisis según la documentación oficial de privilegios de columna
+-- de PostgreSQL; verificación runtime pendiente antes de aplicar (ver
+-- docs/MIGRATION_1B4.md §fix5). La expresión además solo filtra por `id` a
+-- nivel USING = columna pública.
 create policy "profiles_update_own_limited" on public.profiles
   for update to authenticated
   using (id = (select auth.uid()))
@@ -358,7 +376,8 @@ create policy "profiles_update_own_limited" on public.profiles
 -- ---------------------------------------------------------------------------
 -- 8b. GRANTS explícitos de tabla — permisos mínimos, idempotentes
 --     (corrección recuperada tras pérdida por error OSS; verificada con
---     PostgreSQL local — ver docs/MIGRATION_1B4.md §Pruebas)
+--     PostgreSQL local — ver docs/MIGRATION_1B4.md §Pruebas.
+--     fix5: SELECT de profiles reducido a COLUMNAS PÚBLICAS — privacidad.)
 -- ----------------------------------------------------------------------------
 -- FUNDAMENTO: RLS filtra FILAS, pero PostgreSQL además exige privilegios de
 -- TABLA para que una query avance. Sin SELECT concedido, una sentencia de
@@ -374,8 +393,25 @@ create policy "profiles_update_own_limited" on public.profiles
 --   * categories: SELECT solo a anon/authenticated (espejo exacto de
 --     `categories_select_public`). SIN INSERT/UPDATE/DELETE: ninguna escritura
 --     por API es posible hoy (doble bloqueo: sin grant Y sin policy).
---   * profiles: SELECT a anon/authenticated (espejo de `profiles_select_public`;
---     lectura pública intencional de datos de perfil).
+--   * profiles: PRIVACIDAD (fix5) — SELECT POR COLUMNA, solo los campos que el
+--     frontend lee realmente para home/canales/perfil público: id, username,
+--     display_name, bio, avatar_url, banner_url y created_at (se justifica:
+--     `User.createdAt` forma parte de la interfaz pública en src/types/index.ts
+--     y el badge "miembro desde" es información intencionalmente pública).
+--     Quedan explícitamente SIN lectura API (fallan 42501 para PUBLIC, anon y
+--     authenticated, incluso sobre la propia fila):
+--       - role / status      → datos administrativos internos; el trigger §6
+--         SECURITY INVOKER y las subconsultas WITH CHECK de §8 leen estas
+--         columnas internamente sin requerir grant de SELECT (la evaluación de
+--         policies accede al snapshot pre-sentencia del propio comando; los
+--         privilegios se chequean contra las columnas del resultado final, no
+--         contra lecturas internas de policies — análisis según doc oficial de
+--         privilegios de columna; verificación runtime pendiente, ver docs).
+--       - last_login_at      → telemetría de sesión, jamás exposable.
+--       - username_key       → derivable de username (citext lower); ocultar el
+--         duplicado normalizado reduce superficie sin pérdida funcional.
+--     Nota PostgREST: `select=*` fallará con 403/42501 hasta que el cliente
+--     seleccione explícitamente las columnas públicas (§Pendientes + docs).
 --   * profiles INSERT (authenticated): columnas estrictamente necesarias para
 --     la política `profiles_insert_self_new`: id (propia), username,
 --     username_key, display_name (todas NOT NULL o requeridas por el flujo de
@@ -424,9 +460,18 @@ grant  usage on schema public to   anon, authenticated;
 revoke all on table public.categories from public, anon, authenticated;
 grant  select on table public.categories to anon, authenticated;
 
--- profiles: lectura pública + escritura mínima por columna para authenticated.
+-- profiles: lectura PÚBLICA solo por columna (fix5 — privacidad) + escritura
+-- mínima por columna para authenticated. El REVOKE ALL anterior neutraliza
+-- cualquier concesión amplia preexistente (incluida PUBLIC); el SELECT general
+-- de tabla queda deliberadamente NO otorgado: solo las columnas públicas.
 revoke all on table public.profiles from public, anon, authenticated;
-grant  select on table public.profiles to anon, authenticated;
+
+-- SELECT por columna = allow-list de privacidad. role/status/last_login_at/
+-- username_key quedan SIN lectura API para PUBLIC, anon y authenticated
+-- (denegación explícita por omisión del grant: sin privilegio de columna,
+-- toda referencia falla SQLSTATE 42501 antes de evaluar policies).
+grant select (id, username, display_name, bio, avatar_url, banner_url, created_at)
+  on table public.profiles to anon, authenticated;
 
 grant insert (id, username, username_key, display_name) on table public.profiles to authenticated;
 -- role/status EXCLUIDOS del grant INSERT deliberadamente: un payload que los
@@ -448,7 +493,7 @@ revoke all on function public.handle_new_user()            from public, anon, au
 revoke all on function public.protect_profile_privileges() from public, anon, authenticated;
 -- (Las funciones trigger se ejecutan internamente; no requieren EXECUTE público.)
 
-comment on table public.profiles   is 'NEXURA Etapa 1B.4 — perfil público 1:1 con auth.users. role/status SOLO editables por SQL administrativo directo (current_user=postgres); nunca vía API.';
+comment on table public.profiles   is 'NEXURA Etapa 1B.4 — perfil público 1:1 con auth.users. role/status SOLO editables por SQL administrativo directo (current_user=postgres); nunca vía API. Privacidad fix5: lectura API solo columnas públicas {id, username, display_name, bio, avatar_url, banner_url, created_at}; role/status/last_login_at/username_key sin SELECT para anon/authenticated.';
 comment on table public.categories is 'NEXURA Etapa 1B.4 — categorías espejo de category.ts. Escritura solo administrativa por ahora.';
 
 -- === FIN DE LA MIGRACIÓN — requiere revisión humana antes de aplicarse ===
