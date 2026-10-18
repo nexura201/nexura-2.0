@@ -356,6 +356,90 @@ create policy "profiles_update_own_limited" on public.profiles
 -- (El borrado real ocurre por cascada desde auth.users al eliminar la cuenta en Dashboard/API admin.)
 
 -- ---------------------------------------------------------------------------
+-- 8b. GRANTS explícitos de tabla — permisos mínimos, idempotentes
+--     (corrección recuperada tras pérdida por error OSS; verificada con
+--     PostgreSQL local — ver docs/MIGRATION_1B4.md §Pruebas)
+-- ----------------------------------------------------------------------------
+-- FUNDAMENTO: RLS filtra FILAS, pero PostgreSQL además exige privilegios de
+-- TABLA para que una query avance. Sin SELECT concedido, una sentencia de
+-- `anon`/`authenticated` falla con SQLSTATE 42501 ANTES de evaluar cualquier
+-- policy (las policies no otorgan permisos). Las policies de §8 declaran el
+-- "qué filas"; estos GRANT declaran el "qué operaciones/columnas". Ambos
+-- niveles deben coexistir: deny-by-default en tablas + allow-list en columnas
+-- sensibles + RLS por fila.
+--
+-- Reglas aplicadas:
+--   * USAGE sobre el esquema SOLO a los roles que consultan las policies
+--     (`anon`, `authenticated`). No se concede a PUBLIC ni a otros roles.
+--   * categories: SELECT solo a anon/authenticated (espejo exacto de
+--     `categories_select_public`). SIN INSERT/UPDATE/DELETE: ninguna escritura
+--     por API es posible hoy (doble bloqueo: sin grant Y sin policy).
+--   * profiles: SELECT a anon/authenticated (espejo de `profiles_select_public`;
+--     lectura pública intencional de datos de perfil).
+--   * profiles INSERT (authenticated): columnas estrictamente necesarias para
+--     la política `profiles_insert_self_new`: id (propia), username,
+--     username_key, display_name (todas NOT NULL o requeridas por el flujo de
+--     alta directa) + role/status, QUE QUEDAN BLOQUEADAS A NIVEL DE GRANT POR
+--     COLUMNA. Hallazgo verificado en PostgreSQL 15 local: los privilegios de
+--     tabla/columna se evalúan ANTES de RLS, por lo que conceder INSERT sobre
+--     role/status habilitaría en la práctica el auto-cambio de rol a todo
+--     usuario registrado que incluya 'OWNER'/'ADMIN' en su payload INSERT —
+--     la policy WITH CHECK rechazaría valores distintos de USER/ACTIVE, pero
+--     role='USER' explícito pasaría y el default de columna dejaría de ser un
+--     límite duro. Con el grant limitado a {id, username, username_key,
+--     display_name}, cualquier INSERT que mencione role/status falla con 42501
+--     antes de tocar policies/triggers, y los valores reales quedan fijados
+--     por DEFAULT 'USER'/'ACTIVE' + WITH CHECK + trigger (invariante "el rol
+--     nunca nace de datos del cliente" reforzado, no debilitado). El camino
+--     normal de creación sigue siendo el trigger SECURITY DEFINER
+--     `handle_new_user()` (§5), que ejecuta como propietario y no depende de
+--     estos grants; el grant directo cubre solo el caso de alta explícita.
+--   * profiles UPDATE (authenticated): ONLY los campos cosméticos editables —
+--     display_name, bio, avatar_url, banner_url. Excluídos deliberadamente:
+--       - role / status   → inmutables vía API (policy WITH CHECK + trigger §6
+--         + este grant por columna = triple capa).
+--       - username        → NO se concede hasta resolver la actualización
+--         COHERENTE de username_key: cambiar `username` sin sincronizar
+--         `username_key` violaría el CHECK `username_key = lower(username)`
+--         dejando filas imposibles de actualizar (falla cerrado, pero rompe
+--         UX). Decisión: mantener bloqueado y documentar como pendiente.
+--       - username_key    → espejo normalizado; jamás editable directo.
+--       - id              → clave 1:1 con auth.users, inmutable.
+--       - created_at/last_login_at → gestión de servidor/admin, no del navegador.
+--   * updated_at no se concede: lo fija el trigger §6.
+--   * SIN DELETE, TRUNCATE, REFERENCES, TRIGGER ni privilegios administrativos
+--     para roles de navegador. Borrado solo por cascada desde auth.users.
+--
+-- Idempotencia: REVOKE primero (incluido a PUBLIC, para neutralizar cualquier
+-- concesión amplia preexistente — p. ej. grants heredados de templates o de
+-- re-ejecuciones parciales), GRANT mínimo después. Los GRANT/REVOKE por
+-- columna son seguros de repetir.
+-- ---------------------------------------------------------------------------
+
+-- Esquema: acceso necesario para resolver public.* desde las queries/policies.
+revoke usage on schema public from anon, authenticated;
+grant  usage on schema public to   anon, authenticated;
+
+-- categories: lectura pública únicamente (sin escritura por API).
+revoke all on table public.categories from public, anon, authenticated;
+grant  select on table public.categories to anon, authenticated;
+
+-- profiles: lectura pública + escritura mínima por columna para authenticated.
+revoke all on table public.profiles from public, anon, authenticated;
+grant  select on table public.profiles to anon, authenticated;
+
+grant insert (id, username, username_key, display_name) on table public.profiles to authenticated;
+-- role/status EXCLUIDOS del grant INSERT deliberadamente: un payload que los
+-- mencione falla 42501 antes que RLS/trigger; los valores nacen de DEFAULT
+-- 'USER'/'ACTIVE' + WITH CHECK (§8). Ver docs/MIGRATION_1B4.md §Pruebas T8/T10.
+grant update (display_name, bio, avatar_url, banner_url) on table public.profiles to authenticated;
+-- (Sin grant UPDATE sobre username/username_key hasta resolver la coherencia
+--  con username_key — ver encabezado §8b y docs/MIGRATION_1B4.md §Pendientes.)
+
+comment on constraint profiles_username_format on public.profiles is
+  'Garantía de coherencia username/username_key. Por eso el grant UPDATE por columna EXCLUYE ambos: permitir editar solo uno rompería este CHECK.';
+
+-- ---------------------------------------------------------------------------
 -- 9. Endurecimiento adicional
 -- ---------------------------------------------------------------------------
 -- Revocar privilegios accidentales heredables (Supabase ya gestiona grants de
