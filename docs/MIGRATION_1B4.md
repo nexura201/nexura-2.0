@@ -15,6 +15,7 @@
 | índice único parcial (`where role='OWNER'`) | Garantiza matemáticamente un solo OWNER en la tabla, sin importar qué ejecute el SQL futuro |
 | seed de 11 categorías | Idempotente (`ON CONFLICT (slug) DO NOTHING`), mismas 11 de `initializeDefaultCategories()` |
 | RLS en ambas tablas | Habilitada de inmediato, deny-by-default. Policies: SELECT público (categories+profiles); INSERT self solo USER/ACTIVE; UPDATE propio cosmético (role/status inmutables); DELETE denegado a todos vía API |
+| §8b GRANTS explícitos (recuperado 1B.4-fix4) | `USAGE` esquema public solo a anon/authenticated; SELECT categories/profiles a anon+authenticated; INSERT por columna {id, username, username_key, display_name} y UPDATE por columna {display_name, bio, avatar_url, banner_url} solo a authenticated; sin DELETE/TRUNCATE ni grants sobre role/status/username_key; REVOKE previo incluye PUBLIC para neutralizar concesiones amplias preexistentes |
 
 ## Decisiones de diseño (mapeo código → SQL)
 - `User.usernameLower` (Prisma) → columna explícita `username_key text` + CHECK `username_key = lower(username)` en vez de índice funcional, porque el frontend actual lee/escribe ese campo directamente. `username` es `citext` (único case-insensitive).
@@ -63,6 +64,50 @@ Garantías del diseño (tras corrección 1B.4-fix2):
 5. **Policy UPDATE documentada con semántica MVCC correcta**: WITH CHECK compara contra el snapshot pre-sentencia (subconsulta = equivalente seguro de `old.role`/`old.status`); se verificó que no queda ninguna expresión de policy usando alias `old`/`new`.
 
 ## Correcciones aplicadas en la revisión de permisos (Etapa 1B.4-fix3)
+
+## Corrección recuperada y probada — §8b GRANTS explícitos (Etapa 1B.4-fix4)
+La corrección de permisos de tabla desarrollada y probada con PostgreSQL local se perdió junto con el workspace (`Failed to copy workspace to OSS`) sin llegar a commitearse. Fue reconstruida en el SQL (§8b) y **validada nuevamente contra PostgreSQL 15.19 local aislado** (los resultados de abajo son de ejecuciones reales, no teóricas).
+
+**Qué concede (§8b):** `GRANT USAGE ON SCHEMA public` solo a `anon`/`authenticated`; `SELECT` sobre `categories` y `profiles` a ambos roles; `INSERT` por columna {id, username, username_key, display_name} y `UPDATE` por columna {display_name, bio, avatar_url, banner_url} solo a `authenticated`. Precedido de `REVOKE ALL ... FROM public, anon, authenticated` para neutralizar concesiones amplias preexistentes (incluido PUBLIC). Sin DELETE/TRUNCATE/REFERENCES/TRIGGER ni privilegios administrativos al navegador.
+
+**Hallazgo clave verificado en ejecución:** los privilegios de tabla/columna se evalúan **antes** que RLS. Conceder INSERT/UPDATE sobre `role`/`status` habría *habilitado* efectivamente el auto-cambio de rol vía API (el payload pasaría el chequeo de permisos y la policy WITH CHECK solo fija USER/ACTIVE como valores lícitos, no como únicos escribibles). Por eso esos dos campos quedan **excluidos del grant por columna**: un intento que los mencione falla con `permission denied` antes de tocar policies/triggers. El invariante "el rol nunca nace de datos del cliente" queda reforzado (DEFAULT + grant-columna + WITH CHECK + trigger), no debilitado.
+
+### Pruebas ejecutadas (PostgreSQL 15.19 local, entorno aislado /tmp/pgtest, simulación mínima de auth.users/anon/authenticated/service_role/auth.uid())
+| # | Prueba | Resultado real |
+|---|---|---|
+| T0 | Alta de 2 usuarios vía trigger `handle_new_user` | ✅ perfiles creados con role=USER, status=ACTIVE |
+| T1 | SELECT `categories` como `anon` | ✅ 11 filas |
+| T2 | SELECT `profiles` como `anon` y `authenticated` | ✅ sin 42501 |
+| T3 | UPDATE propio de bio/avatar_url/banner_url/display_name | ✅ UPDATE 1 |
+| T4 | UPDATE propio de `role`/`status` como authenticated | ✅ RECHAZADO: `permission denied for table profiles` |
+| T5 | Usuario B intenta UPDATE del perfil de A | ✅ `UPDATE 0` (policy USING) |
+| T6 | UPDATE propio de `username` | ✅ RECHAZADO (sin grant columna, pendiente de coherencia con username_key) |
+| T7 | INSERT con id ajena (solo columnas granted) | ✅ RECHAZADO: `new row violates row-level security policy` |
+| T8 | INSERT mencionando role='OWNER' | ✅ RECHAZADO: `permission denied` (grant-columna bloquea antes que RLS) |
+| T9 | DELETE como authenticated | ✅ RECHAZADO: `permission denied` |
+| T10 | INSERT legítimo self (usuario existente en auth.users, sin mencionar role/status) | ✅ creado con defaults USER/ACTIVE |
+| T11 | Bootstrap primer OWNER como postgres (simula Editor SQL) | ✅ UPDATE 1 → role=OWNER |
+| T12 | Degradar al OWNER activo | ✅ RECHAZADO: `NEXURA_CANNOT_MODIFY_OWNER_ROLE` |
+| T13 | Segundo OWNER | ✅ RECHAZADO: `NEXURA_SECOND_OWNER_FORBIDDEN` |
+| T14 | `current_app_role()` como authenticated | ✅ RECHAZADO: `permission denied for function` (EXECUTE sin conceder, coherente con fix3) |
+| T15 | INSERT/DELETE en `categories` como authenticated | ✅ RECHAZADO: `permission denied for table categories` |
+| T16 | Snapshot `information_schema.role_column_grants` | ✅ coincide exactamente con lo planeado (ver tabla abajo); `PUBLIC` sin grants de tabla |
+| T17 | `has_schema_privilege` | ⚠️ anon/authenticated=t; service_role y rol `public`=t **por defecto heredado de template1 en PG vanilla**, no por esta migración (ver limitación) |
+| T18 | Re-ejecución completa de la migración | ✅ exit 0, 0 errores; categorías siguen en 11 (sin duplicados); índice único intacto |
+
+Snapshot final de privilegios (T16, real):
+```
+anon          | categories | SELECT | todas las columnas
+authenticated | categories | SELECT | todas las columnas
+anon          | profiles   | SELECT | todas las columnas
+authenticated | profiles   | SELECT | todas las columnas
+authenticated | profiles   | INSERT | display_name,id,username,username_key
+authenticated | profiles   | UPDATE | avatar_url,banner_url,bio,display_name
+```
+
+**Limitación honesta de T17:** en este entorno vanilla, `USAGE ON SCHEMA public` queda también para el pseudo-rol `PUBLIC` y para `service_role` porque PostgreSQL lo otorga por defecto en `template1` (y en Supabase para `service_role` explícitamente). La migración NO revoca esos casos: hacerlo sobre PUBLIC podría romper objetos internos del proyecto y excedería el alcance pedido ("no conceder a PUBLIC" = no conceder *esta* migración). En Supabase el estado real debe verificarse post-aplicación con `\dp` / `has_schema_privilege` read-only; queda anotado en §Pendientes.
+
+
 6. **Permisos de `current_app_role()` corregidos — incoherencia GRANT/policies eliminada**: la versión anterior revocaba EXECUTE a `anon` pero dejaba un `GRANT ... TO authenticated`, y los comentarios afirmaban que policies la invocaban (`categories_select_public` con filtro por rol, `profiles_admin_all`). Verificación real del SQL: **ninguna policy creada por esta migración la usa** (las dos policies citadas ya no existen; `categories_select_public` es `using (true)`). Se corrigió:
    - `REVOKE EXECUTE ... FROM public, anon, authenticated` (sin ningún GRANT). Las funciones usadas dentro de expresiones RLS **no están exentas de chequeos de permisos**: PostgreSQL las evalúa como el rol de la query y sin EXECUTE provocarían `42501`; al no ser invocada por ninguna policy actual, la revocación total es coherente y además deja cero superficie RPC expuesta al navegador (PostgREST no la ofrece como endpoint ejecutable).
    - Regla explícita para Etapa 1C: el `GRANT EXECUTE TO authenticated` deberá concederse **en la misma migración** que cree las policies ADMIN/MODERATOR que la invoquen (o bien usar subconsultas directas), para no reintroducir el riesgo 42501.
@@ -72,9 +117,11 @@ Garantías del diseño (tras corrección 1B.4-fix2):
 9. **Grants generales revisados** (fix2, confirmado en fix3): funciones trigger (`handle_new_user`, `protect_profile_privileges`) revocadas a public/anon/authenticated — se ejecutan internamente sin requerir EXECUTE público. Registro crea SIEMPRE `role='USER'` (default de columna + trigger + WITH CHECK, triple capa).
 
 ## Limitaciones pendientes (documentadas, no resueltas "inventando")
+- **`username` no editable vía API (pendiente de diseño)**: el grant UPDATE por columna excluye `username`/`username_key` deliberadamente. Permitir cambiar `username` sin sincronizar `username_key` violaría el CHECK `username_key = lower(username)` (falla cerrado, pero deja la fila inutilizable para ediciones futuras). Solución prevista para una etapa posterior: trigger BEFORE UPDATE que fije `username_key = lower(new.username)` atómicamente, o RPC SECURITY DEFINER dedicada; recién entonces conceder `GRANT UPDATE (username)`. Mientras tanto T6 (local PG) confirma el bloqueo.
+- **USAGE de esquema para PUBLIC/service_role**: §8b concede USAGE solo a anon/authenticated y no revoca el otorgamiento por defecto del pseudo-rol PUBLIC ni el de service_role en Supabase (necesario para su operación interna). Verificado en local (T17); en Supabase auditar post-aplicación en modo read-only (`\dp public.*`, `has_schema_privilege`). No es un vector directo: sin grants de tabla sobre PUBLIC, no hay acceso a datos.
 - **Objetos SECURITY DEFINER futuros propiedad de postgres**: un trigger `SECURITY INVOKER` evalúa `current_user`; dentro de una función DEFINER ejecutada como postgres, `current_user` pasa a ser postgres y heredaría el permiso del bootstrap. Hoy NO existe ningún objeto DEFINER propiedad de postgres que escriba en `profiles` (`handle_new_user` solo INSERTA con rol USER forzado; `current_app_role` es lectura estable). Regla para 1C: si `admin_set_role` se define como postgres DEFINER, primero endurecer el trigger con allowlist (`pg_trigger_depth()` + `internal.am_i_admin` GUC transaccional) o crearla propiedad de `supabase_admin`.
-- **Idempotencia total no verificable sin ejecutar**: la migración está escrita idempotente (`if not exists`, `or replace`, `drop ... if exists`, `ON CONFLICT DO NOTHING`, bloques `duplicate_object`), pero no se pudo probar doble ejecución real (requiere base Postgres local o staging; el entorno carece de cliente Postgres y estaba prohibido instalar/conectar). Riesgo residual conocido: `drop trigger if exists on_auth_user_created` reemplazaría un trigger homónimo de otro sistema (§Riesgos).
-- **Comportamiento runtime de RLS/policies/triggers**: no ejecutado; solo análisis estático. El checklist abajo cubre la validación funcional en staging.
+- **Idempotencia total — verificada en PostgreSQL 15.19 local (fix4)**: doble ejecución completa de la migración exitosa (exit 0, cero errores), categorías permanecen en 11, índice único parcial intacto, policies recreadas sin conflicto (T18). Cobertura limitada: entorno simulado (auth.users mínimo, `auth.uid()` vía GUC), no un proyecto Supabase real; riesgo residual conocido: `drop trigger if exists on_auth_user_created` reemplazaría un trigger homónimo de otro sistema (§Riesgos).
+- **Comportamiento runtime de RLS/policies/triggers/grants**: verificado contra PostgreSQL 15.19 local aislado en fix4 (tabla de pruebas T0–T18 arriba). Resta la validación en staging Supabase real (PostgREST añade su propia capa de roles/JWT): checklist abajo.
 
 ## Checklist ANTES de aplicar (pendiente de verificación humana)
 1. Leer el SQL completo y aprobarlo.
@@ -85,4 +132,4 @@ Garantías del diseño (tras corrección 1B.4-fix2):
 6. Recién entonces habilitar la consuming code en 1B.5 (AuthContext dual-mode).
 
 ## Nota de aplicación
-Esta migración **no fue ejecutada** contra ninguna base. Ninguna conexión ni escritura remota ocurrió durante la Etapa 1B.4.
+Esta migración **no fue ejecutada contra ninguna base remota ni proyecto Supabase**. En la corrección fix4 sí se ejecutó, dos veces completas, contra un PostgreSQL 15.19 **local aislado** creado ex-profeso en /tmp (fuera del repo, detenido tras las pruebas; simulación mínima de auth.users/roles Supabase). Ninguna conexión ni escritura remota ocurrió durante la Etapa 1B.4.
