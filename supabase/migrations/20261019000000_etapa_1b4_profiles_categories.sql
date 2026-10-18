@@ -352,23 +352,26 @@ create policy "profiles_insert_self_new" on public.profiles
 -- administrativa llegara al UPDATE, exige current_user='postgres' para todo
 -- cambio de role/status. updated_at lo fija el propio trigger.
 -- PRIVACIDAD (fix5): las subconsultas de WITH CHECK leen role/status — columnas
--- NO concedidas en SELECT a anon/authenticated (§8b). Esto NO rompe la policy:
--- PostgreSQL chequea los privilegios de columna contra las columnas del
--- resultado final de la sentencia (la lista SET), no contra las lecturas
--- internas que realiza la evaluación de la policy sobre el snapshot visible al
--- propio comando UPDATE (cuyo objetivo ya fue validado por USING + grant
--- UPDATE). Análisis según la documentación oficial de privilegios de columna
--- de PostgreSQL; verificación runtime pendiente antes de aplicar (ver
--- docs/MIGRATION_1B4.md §fix5). La expresión además solo filtra por `id` a
--- nivel USING = columna pública.
+-- NO concedidas en SELECT a anon/authenticated (§8b). FIX6: la policy se
+-- simplificó para eliminar toda subconsulta a columnas ocultas: USING y
+-- WITH CHECK se basan únicamente en `id = auth.uid()` (columna pública), de
+-- modo que la evaluación de RLS nunca lee `role`, `status`, `last_login_at`
+-- ni `username_key` — se elimina así el riesgo residual de fix5 (que exigía
+-- confirmar empíricamente si PostgreSQL requiere privilegios SELECT para las
+-- lecturas internas de la policy). La inmutabilidad de role/status sigue
+-- garantizada por DOS capas independientes, sin depender de esta policy:
+--   (a) GRANT UPDATE por columna (§8b) excluye role/status => cualquier
+--       intento falla SQLSTATE 42501 ANTES que RLS;
+--   (b) trigger protect_profile_privileges() (§6) rechaza cambios de
+--       role/status incluso vía funciones SECURITY DEFINER.
+-- username/username_key siguen fuera del UPDATE concedido hasta resolver la
+-- actualización coherente de username_key (y el CHECK que los vincula actúa
+-- como red adicional). Solo perfil propio: id = auth.uid() en USING y WITH
+-- CHECK. Ver docs/MIGRATION_1B4.md §fix6.
 create policy "profiles_update_own_limited" on public.profiles
   for update to authenticated
   using (id = (select auth.uid()))
-  with check (
-    id = (select auth.uid())
-    and role   = (select p.role   from public.profiles p where p.id = (select auth.uid()))
-    and status = (select p.status from public.profiles p where p.id = (select auth.uid()))
-  );
+  with check (id = (select auth.uid()));
 
 -- DELETE: sin política de delete => denegado para todos vía API.
 -- (El borrado real ocurre por cascada desde auth.users al eliminar la cuenta en Dashboard/API admin.)
