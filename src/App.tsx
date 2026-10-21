@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, useEffect, ErrorInfo, ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
@@ -93,6 +93,8 @@ import { OwnerChannelsPage, OwnerLivesPage, OwnerReelsPage, OwnerCalendarPage } 
 import { OwnerSettingsPage, OwnerSecurityPage, OwnerActivityPage } from './pages/owner/OwnerSettingsPage';
 import { OwnerServersPage } from './pages/owner/OwnerServersPage';
 import { StatusPage } from './pages/StatusPage';
+import { DemoInfoPage } from './pages/demo/DemoInfoPage';
+import { seedDemoData } from './services/demoData';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
@@ -156,6 +158,11 @@ function OwnerComingSoon({ title }: { title: string }) {
 }
 
 function AppRoutes() {
+  // Etapa 5: sembrar el universo demo (idempotente, solo si DEMO_MODE activo).
+  useEffect(() => {
+    seedDemoData();
+  }, []);
+
   return (
     <Routes>
       {/* Rutas públicas */}
@@ -185,6 +192,8 @@ function AppRoutes() {
       <Route path="/support/tickets" element={<Layout><MyTicketsPage /></Layout>} />
       <Route path="/support/tickets/:id" element={<Layout><TicketDetailPage /></Layout>} />
       <Route path="/status" element={<Layout><StatusPage /></Layout>} />
+      {/* Etapa 5: transparencia del modo demo (página pública) */}
+      <Route path="/demo-info" element={<Layout><DemoInfoPage /></Layout>} />
       
       {/* Rutas protegidas */}
       <Route path="/dashboard" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />

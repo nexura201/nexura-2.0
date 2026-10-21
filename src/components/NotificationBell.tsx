@@ -72,7 +72,7 @@ export function NotificationBell() {
                     !notification.read ? 'bg-primary' : 'bg-transparent'
                   }`} />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-white">{notification.title}</p>
+                    <p className="text-sm font-medium text-white">{notification.title}{notification.data?.demo === true ? ' · DEMO' : ''}</p>
                     <p className="text-xs text-text-secondary mt-1">{notification.body}</p>
                     <p className="text-xs text-text-muted mt-2">
                       {new Date(notification.createdAt).toLocaleDateString('es')}

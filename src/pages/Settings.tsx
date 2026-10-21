@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import * as db from '../services/database';
+// Etapa 5: Modo Demo (configuración)
+import { isDemoMode, setDemoMode } from '../config/demoMode';
+import { seedDemoData, resetDemoData, getDemoStatus } from '../services/demoData';
 import {
   User, Shield, Bell, Lock, Eye, EyeOff, Loader2,
-  Camera, Upload, Check
+  Camera, Upload, Check, FlaskConical
 } from 'lucide-react';
 
 export function SettingsPage() {
@@ -20,6 +23,7 @@ export function SettingsPage() {
     { id: 'security', label: 'Seguridad', icon: Lock },
     { id: 'privacy', label: 'Privacidad', icon: Eye },
     { id: 'notifications', label: 'Notificaciones', icon: Bell },
+    { id: 'demo', label: 'Modo Demo', icon: FlaskConical },
   ];
 
   return (
@@ -52,6 +56,7 @@ export function SettingsPage() {
           {activeSection === 'security' && <SecuritySettings user={user} addToast={addToast} />}
           {activeSection === 'privacy' && <PrivacySettings />}
           {activeSection === 'notifications' && <NotificationSettings />}
+          {activeSection === 'demo' && <DemoSettings addToast={addToast} />}
         </div>
       </div>
     </div>
@@ -449,6 +454,106 @@ function NotificationSettings() {
         </div>
       </div>
       <p className="text-xs text-text-muted mt-4">Más opciones de notificaciones disponibles próximamente.</p>
+    </div>
+  );
+}
+
+/**
+ * Etapa 5 — Configuración del Modo Demo.
+ * Permite ver/activar/desactivar el modo demo (override local, sin tocar
+ * autenticación ni credenciales) y restaurar los datos demo originales.
+ */
+function DemoSettings({ addToast }: { addToast: ReturnType<typeof useToast>['addToast'] }) {
+  const [demoOn, setDemoOn] = useState(isDemoMode());
+  const [confirmReset, setConfirmReset] = useState(false);
+  const status = getDemoStatus();
+
+  const handleToggle = () => {
+    const next = !demoOn;
+    setDemoMode(next);
+    setDemoOn(next);
+    if (next) seedDemoData();
+    addToast(next ? 'Modo demo activado.' : 'Modo demo desactivado.', next ? 'success' : 'info');
+    setTimeout(() => window.location.reload(), 300);
+  };
+
+  const handleReset = () => {
+    const { removed } = resetDemoData();
+    setConfirmReset(false);
+    addToast(`Datos demo restaurados (${removed} entidades demo eliminadas y re-sembradas).`, 'success');
+    setTimeout(() => window.location.reload(), 400);
+  };
+
+  return (
+    <div className="bg-bg-card border border-border rounded-xl p-6">
+      <h2 className="text-lg font-semibold text-white mb-1">Modo Demo</h2>
+      <p className="text-text-secondary text-sm mb-6">
+        Muestra la plataforma con canales, streams, reels, clips, chat y estadísticas de ejemplo.
+        Todos los datos son locales a este navegador y están identificados como DEMO. No hay base de datos compartida.
+      </p>
+
+      <div className="flex items-center justify-between p-4 bg-bg-elevated rounded-lg mb-4">
+        <div>
+          <p className="text-white text-sm font-medium">DEMO_MODE</p>
+          <p className="text-text-muted text-xs">
+            Estado actual: <span className={demoOn ? 'text-amber-400 font-semibold' : 'text-text-secondary'}>{demoOn ? 'ACTIVO' : 'INACTIVO'}</span>
+            {' · '}También puede fijarse en tiempo de build con VITE_DEMO_MODE=true.
+          </p>
+        </div>
+        <button
+          onClick={handleToggle}
+          aria-label={demoOn ? 'Desactivar modo demo' : 'Activar modo demo'}
+          className={`w-12 h-7 rounded-full relative transition-colors ${demoOn ? 'bg-amber-500' : 'bg-bg-input border border-border'}`}
+        >
+          <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${demoOn ? 'left-6' : 'left-1'}`} />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center mb-6">
+        {[
+          { label: 'Canales demo', value: status.channels },
+          { label: 'Streams LIVE demo', value: status.liveStreams },
+          { label: 'Reels', value: status.reels },
+          { label: 'Clips', value: status.clips },
+        ].map(s => (
+          <div key={s.label} className="p-3 bg-bg-elevated rounded-lg">
+            <p className="text-lg font-bold text-white">{s.value}</p>
+            <p className="text-[11px] text-text-muted">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t border-border pt-4">
+        {!confirmReset ? (
+          <button
+            onClick={() => setConfirmReset(true)}
+            disabled={!demoOn}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-bg-elevated border border-border text-white hover:border-amber-500/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Restaurar datos demo
+          </button>
+        ) : (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <p className="text-sm text-amber-300 mb-3">
+              ¿Restaurar los datos demo originales? Se eliminarán únicamente las entidades marcadas como demo
+              (canales <code className="text-xs">demo_*</code>, sus streams/reels/clips/chat/notificaciones) y se volverá a
+              sembrar el contenido inicial. <strong>Tus cuentas y creaciones locales no demo no se ven afectadas.</strong>
+            </p>
+            <div className="flex gap-2">
+              <button onClick={handleReset} className="px-4 py-2 rounded-lg text-sm font-medium bg-amber-500 text-black hover:bg-amber-400">
+                Sí, restaurar
+              </button>
+              <button onClick={() => setConfirmReset(false)} className="px-4 py-2 rounded-lg text-sm font-medium bg-bg-elevated border border-border text-white">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+        <p className="text-xs text-text-muted mt-4">
+          Los datos demo no incluyen información financiera real. Ver detalle en{' '}
+          <a href="/demo-info" className="text-primary-light hover:underline">/demo-info</a>.
+        </p>
+      </div>
     </div>
   );
 }

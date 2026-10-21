@@ -165,6 +165,18 @@ Si no definís ninguna URL, NEXURA usa un fallback claramente etiquetado **"DEMO
 
 La app reporta el estado de la infraestructura como **Configurado** cuando existe una URL definida. Eso **no** afirma que el servidor responda: el health check real (verificación de conectividad y webhooks de eventos start/stop) queda pendiente para una futura etapa/backend. Ninguna pantalla debe mostrar — ni mostró — un falso "Online".
 
+## 🧪 MODO DEMO
+
+NEXURA incluye un **modo demo** pensado para demostrar la plataforma sin base de datos real.
+
+- **Qué es:** un universo de contenido ficticio y coherente (canales `demo_*`, streams LIVE simulados, reels, clips, VODs, mensajes de chat de un bot de ejemplo, notificaciones y actividad) que se siembra en **localStorage del navegador**. No representa usuarios reales ni actividad compartida.
+- **Cómo activarlo:** `VITE_DEMO_MODE=true` en `.env.local` / Environment Variables de Vercel (requiere rebuild), o desde **Configuración → Modo Demo** (override local, sin recompilar). Por defecto está ON en `npm run dev` y OFF en producción salvo activación explícita.
+- **Cómo desactivarlo:** mismo toggle en Configuración → Modo Demo, o `VITE_DEMO_MODE=false`.
+- **Identificación visual:** franja global "Modo demo" en la parte superior, badges `DEMO` junto a viewers/seguidores/LIVE/chat/notificaciones cuando el dato puede confundirse con real, y página pública **`/demo-info`** con el detalle completo.
+- **Restaurar el seed:** botón "Restaurar datos demo" (con confirmación) elimina ÚNICAMENTE entidades demo (`demo_*` y lo que cuelga de ellas) y vuelve a sembrar los valores originales. Tus cuentas y creaciones locales no-demo no se ven afectadas.
+- **Límites honestos:** los streams demo son metadatos ficticios (no hay transmisión real detrás); los videos de muestra de reels provienen de URLs públicas de ejemplo ya incluidas en el seed original. **No existen datos financieros falsos**: las secciones de monetización muestran configuración y estados vacíos explicativos.
+- **Para producción:** el comprador debe conectar su propio backend/base de datos; el modo demo es solo material de demostración local.
+
 ## ⚠️ Notas importantes
 
 ### GitHub Pages

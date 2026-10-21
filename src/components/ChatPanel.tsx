@@ -250,6 +250,9 @@ function ChatMessageItem({ message, isModerator, isStreamer, onClick }: ChatMess
             'text-white'
           }`}>
             {message.displayName}
+            {message.userId === 'demo_bot' && (
+              <span className="ml-1 text-[9px] font-semibold uppercase tracking-wide text-amber-400" title="Mensaje de demostración ficticio">DEMO</span>
+            )}
           </span>
         </div>
         

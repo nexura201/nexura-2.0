@@ -21,6 +21,10 @@ import {
   type NexuraIAConnectionState,
 } from '../services/nexuraIA.service';
 import type { NexuraIaBehaviorId } from '../config/nexuraIA.context';
+// Etapa 5: identificación de contenido demo (badge + bandera única)
+import { isDemoMode } from '../config/demoMode';
+import { DEMO_USERNAME_PREFIX } from '../services/demoData';
+import { DemoBadge } from '../components/DemoBadge';
 
 /** Clave local de la preferencia de comportamiento elegida en el Control Center.
  *  NO contiene secretos: solo 'concisa' | 'equilibrada' | 'detallada'. */
@@ -111,6 +115,7 @@ export function ExplorePage() {
                     <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
                       <Users className="w-3 h-3" />
                       {viewerCount.current}
+                      {isDemoMode() && <DemoBadge />}
                     </div>
                     <Play className="w-10 h-10 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
@@ -166,7 +171,7 @@ export function ExplorePage() {
               {u.bio && <p className="text-xs text-text-secondary mt-3 line-clamp-2">{u.bio}</p>}
               <div className="flex items-center gap-3 mt-3 text-xs text-text-muted">
                 <span className="flex items-center gap-1">
-                  <Users className="w-3 h-3" /> {db.getFollowerCount(u.id)} seguidores
+                  <Users className="w-3 h-3" /> {db.getFollowerCount(u.id)} seguidores{isDemoMode() && u.username.startsWith(DEMO_USERNAME_PREFIX) ? ' · DEMO' : ''}
                 </span>
               </div>
             </Link>
