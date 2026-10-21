@@ -18,6 +18,7 @@ export function StreamConfigPage() {
   const [streamTitle, setStreamTitle] = useState('');
   const [streamCategory, setStreamCategory] = useState('');
   const [streamTags, setStreamTags] = useState('');
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -26,8 +27,10 @@ export function StreamConfigPage() {
         const config = streaming.getStreamConfig(user.id);
         setStreamConfig(config);
         
-        // Get stream key for display
-        const key = streaming.getStreamKeyForDisplay(channel.id);
+        // Ensure the channel has a Stream Key (idempotent: reuses the existing
+        // key if present, generates one only on first access). Safe to call on
+        // every mount/reload — never regenerates an existing key.
+        const key = streaming.ensureStreamKey(channel.id);
         setStreamKey(key);
         
         // Get current stream info
@@ -41,35 +44,65 @@ export function StreamConfigPage() {
     }
   }, [user]);
 
-  const handleCopyServer = () => {
-    if (streamConfig) {
-      navigator.clipboard.writeText(streamConfig.rtmpServerUrl);
+  const copyToClipboard = async (text: string): Promise<boolean> => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+      // Fallback for non-secure contexts (e.g. plain http in local dev)
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return ok;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleCopyServer = async () => {
+    if (!streamConfig) return;
+    const ok = await copyToClipboard(streamConfig.rtmpServerUrl);
+    if (ok) {
       setCopied('server');
       addToast('success', 'URL del servidor copiada');
       setTimeout(() => setCopied(null), 2000);
+    } else {
+      addToast('error', 'No se pudo copiar al portapapeles. Seleccioná el texto manualmente.');
     }
   };
 
-  const handleCopyKey = () => {
-    if (streamKey) {
-      navigator.clipboard.writeText(streamKey);
+  const handleCopyKey = async () => {
+    if (!streamKey) return;
+    const ok = await copyToClipboard(streamKey);
+    if (ok) {
       setCopied('key');
       addToast('success', 'Stream Key copiada');
       setTimeout(() => setCopied(null), 2000);
+    } else {
+      addToast('error', 'No se pudo copiar al portapapeles. Mostrá la clave y seleccioná el texto manualmente.');
     }
   };
 
-  const handleRegenerateKey = () => {
-    if (user) {
-      const channel = db.getChannelByUserId(user.id);
-      if (channel) {
-        if (confirm('¿Estás seguro? Esto invalidará tu Stream Key actual y necesitarás actualizar OBS.')) {
-          streaming.regenerateStreamKey(channel.id);
-          const newKey = streaming.getStreamKeyForDisplay(channel.id);
-          setStreamKey(newKey);
-          addToast('success', 'Stream Key regenerada');
-        }
-      }
+  const handleRegenerateConfirmed = () => {
+    if (!user) return;
+    const channel = db.getChannelByUserId(user.id);
+    if (!channel) return;
+    try {
+      streaming.regenerateStreamKey(channel.id);
+      const newKey = streaming.getStreamKeyForDisplay(channel.id);
+      setStreamKey(newKey);
+      setShowKey(false);
+      setShowRegenerateConfirm(false);
+      addToast('success', 'Stream Key regenerada. Actualizala en OBS/Streamlabs.');
+    } catch {
+      setShowRegenerateConfirm(false);
+      addToast('error', 'No se pudo regenerar la Stream Key. Intentá de nuevo.');
     }
   };
 
@@ -207,6 +240,10 @@ export function StreamConfigPage() {
             </div>
           </div>
 
+          <p className="text-xs text-text-muted flex items-start gap-1.5">
+            <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+            <span>La URL del servidor de streaming se configura por separado. Esta clave identifica tu canal ante el servidor RTMP que utilices (OBS, Streamlabs u otro compatible).</span>
+          </p>
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1.5">Tu Stream Key</label>
             <div className="flex gap-2">
@@ -233,7 +270,7 @@ export function StreamConfigPage() {
                 {copied === 'key' ? 'Copiado' : 'Copiar'}
               </button>
               <button
-                onClick={handleRegenerateKey}
+                onClick={() => setShowRegenerateConfirm(true)}
                 className="px-4 py-2.5 bg-danger/10 border border-danger/20 rounded-lg text-danger hover:bg-danger/20 transition-colors flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -304,6 +341,38 @@ export function StreamConfigPage() {
           </div>
         </div>
       </div>
+
+      {/* Regenerate confirmation modal */}
+      {showRegenerateConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="regenerate-key-title">
+          <div className="bg-bg-card border border-border rounded-xl p-6 max-w-md w-full">
+            <h3 id="regenerate-key-title" className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-warning" />
+              ¿Regenerar tu Stream Key?
+            </h3>
+            <ul className="text-sm text-text-secondary space-y-2 mb-5 list-disc pl-4">
+              <li>La clave actual dejará de ser la utilizada por NEXURA.</li>
+              <li>Deberás actualizarla en <strong className="text-white">OBS / Streamlabs</strong> antes de volver a transmitir.</li>
+              <li>Cualquier transmisión activa con la clave anterior quedará sin efecto.</li>
+            </ul>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowRegenerateConfirm(false)}
+                className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRegenerateConfirmed}
+                className="px-4 py-2 rounded-lg bg-danger text-white hover:bg-danger/80 transition-colors flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Sí, regenerar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -32,14 +32,44 @@ function setCollection<T>(key: string, data: T[]): void {
 }
 
 function hashStreamKey(key: string): string {
-  // Simple hash for demo - in production use bcrypt/argon2
+  // Simple non-cryptographic fingerprint for demo purposes only.
+  // In production this must be replaced by bcrypt/argon2 on the server.
+  // NOTE: never derive anything reversible from the raw key here — the
+  // raw key is stored separately in localStorage ONLY to emulate a real
+  // platform that lets you reveal your existing key (local/demo mode).
   let hash = 0;
   for (let i = 0; i < key.length; i++) {
     const char = key.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash;
   }
-  return 'sk_hash_' + Math.abs(hash).toString(36) + '_' + btoa(key).slice(0, 20);
+  return 'sk_hash_' + Math.abs(hash).toString(36);
+}
+
+const RAW_STREAM_KEY_PREFIX = 'nexura_stream_key_raw_';
+
+/**
+ * Idempotently ensures the channel has a stream key and returns the raw key
+ * for local/demo display. If a key already exists it is reused unchanged
+ * (never regenerated on render). Safe to call on every mount/reload.
+ */
+export function ensureStreamKey(channelId: string): string {
+  getOrCreateStreamKey(channelId); // creates record + raw key if missing
+  const raw = localStorage.getItem(RAW_STREAM_KEY_PREFIX + channelId);
+  if (!raw) {
+    // Defensive self-heal: metadata existed but raw copy was cleared.
+    const fresh = generateStreamKey();
+    localStorage.setItem(RAW_STREAM_KEY_PREFIX + channelId, fresh);
+    const keys = getCollection<StreamKey>(STREAM_KEYS.streamKeys);
+    const idx = keys.findIndex(k => k.channelId === channelId);
+    if (idx !== -1) {
+      keys[idx].keyHash = hashStreamKey(fresh);
+      keys[idx].updatedAt = new Date().toISOString();
+      setCollection(STREAM_KEYS.streamKeys, keys);
+    }
+    return fresh;
+  }
+  return raw;
 }
 
 function generateStreamKey(): string {
@@ -67,8 +97,9 @@ export function getOrCreateStreamKey(channelId: string): StreamKey {
     keys.push(streamKey);
     setCollection(STREAM_KEYS.streamKeys, keys);
     
-    // Store raw key temporarily for display (in production, only show once)
-    localStorage.setItem(`streamhub_temp_key_${channelId}`, rawKey);
+    // Store raw key locally so the owner can reveal it later (demo mode).
+    // In production this would only be shown once at creation time.
+    localStorage.setItem(RAW_STREAM_KEY_PREFIX + channelId, rawKey);
     
     db.createAuditLog('system', 'STREAM_KEY_CREATED', 'channel', channelId, 'Stream key generated');
   }
@@ -77,30 +108,33 @@ export function getOrCreateStreamKey(channelId: string): StreamKey {
 }
 
 export function getStreamKeyForDisplay(channelId: string): string | null {
-  // In production, this would require re-authentication
-  // For demo, we retrieve the temp key if it exists
-  return localStorage.getItem(`streamhub_temp_key_${channelId}`);
+  // Local/demo mode: retrieve the stored raw key if it exists.
+  return localStorage.getItem(RAW_STREAM_KEY_PREFIX + channelId);
 }
 
 export function regenerateStreamKey(channelId: string): StreamKey {
   const keys = getCollection<StreamKey>(STREAM_KEYS.streamKeys);
   const idx = keys.findIndex(k => k.channelId === channelId);
-  
+
+  let streamKey: StreamKey;
   if (idx === -1) {
-    throw new Error('STREAM_KEY_NOT_FOUND');
+    // No record yet for this channel: create one with a fresh key instead of
+    // throwing, so "Regenerate" always works from the UI.
+    streamKey = getOrCreateStreamKey(channelId);
+  } else {
+    const rawKey = generateStreamKey();
+    keys[idx].keyHash = hashStreamKey(rawKey);
+    keys[idx].updatedAt = new Date().toISOString();
+    setCollection(STREAM_KEYS.streamKeys, keys);
+    streamKey = keys[idx];
+
+    // Persist the new raw key (replaces the previous one)
+    localStorage.setItem(RAW_STREAM_KEY_PREFIX + channelId, rawKey);
+
+    db.createAuditLog('system', 'STREAM_KEY_REGENERATED', 'channel', channelId, 'Stream key regenerated');
   }
-  
-  const rawKey = generateStreamKey();
-  keys[idx].keyHash = hashStreamKey(rawKey);
-  keys[idx].updatedAt = new Date().toISOString();
-  setCollection(STREAM_KEYS.streamKeys, keys);
-  
-  // Store new key temporarily
-  localStorage.setItem(`streamhub_temp_key_${channelId}`, rawKey);
-  
-  db.createAuditLog('system', 'STREAM_KEY_REGENERATED', 'channel', channelId, 'Stream key regenerated');
-  
-  return keys[idx];
+
+  return streamKey;
 }
 
 export function validateStreamKey(channelId: string, rawKey: string): boolean {
