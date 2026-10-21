@@ -57,6 +57,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage, RegisterPage } from './pages/AuthPages';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { VerifyEmailPage } from './pages/VerifyEmail';
 import { ProfilePage, ChannelPage } from './pages/ProfileChannel';
 import { DashboardPage } from './pages/DashboardPage';
 import { NotificationsPage } from './pages/NotificationsPage';
@@ -161,6 +162,8 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      {/* Verificación de email (flujo local/demo): consume ?token= del enlace simulado */}
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/explore" element={<Layout><ExplorePage /></Layout>} />
       <Route path="/categories" element={<Layout><CategoriesPage /></Layout>} />
       <Route path="/search" element={<Layout><SearchPage /></Layout>} />
@@ -186,8 +189,16 @@ function AppRoutes() {
       <Route path="/dashboard" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard/stream" element={<ProtectedRoute><Layout><StreamConfigPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard/analytics" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
+      {/* Alias de contenido existente: Mis Videos / Mis Clips (los enlaces internos ya apuntan aquí) */}
+      <Route path="/dashboard/videos" element={<ProtectedRoute><Layout><LibraryPage /></Layout></ProtectedRoute>} />
+      <Route path="/dashboard/clips" element={<ProtectedRoute><Layout><LibraryPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard/monetization" element={<ProtectedRoute><Layout><MonetizationDashboard /></Layout></ProtectedRoute>} />
       <Route path="/dashboard/monetization/settings" element={<ProtectedRoute><Layout><MonetizationSettingsPage /></Layout></ProtectedRoute>} />
+      {/* Alias a la pantalla de configuración de monetización (enlaces existentes del dashboard de monetización).
+          Payouts reales dependerán de un proveedor externo (Etapa 9). */}
+      <Route path="/dashboard/monetization/subscriptions" element={<ProtectedRoute><Layout><MonetizationSettingsPage /></Layout></ProtectedRoute>} />
+      <Route path="/dashboard/monetization/transactions" element={<ProtectedRoute><Layout><MonetizationSettingsPage /></Layout></ProtectedRoute>} />
+      <Route path="/dashboard/monetization/payouts" element={<ProtectedRoute><Layout><MonetizationSettingsPage /></Layout></ProtectedRoute>} />
       <Route path="/notifications" element={<ProtectedRoute><Layout><NotificationsPage /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
       <Route path="/settings/security" element={<ProtectedRoute><Layout><SecuritySettingsPage /></Layout></ProtectedRoute>} />
@@ -196,6 +207,10 @@ function AppRoutes() {
       <Route path="/library" element={<ProtectedRoute><Layout><LibraryPage /></Layout></ProtectedRoute>} />
       <Route path="/stream-test" element={<ProtectedRoute><Layout><StreamTestPage /></Layout></ProtectedRoute>} />
       <Route path="/moderation/reports" element={<ProtectedRoute><Layout><ReportsPage /></Layout></ProtectedRoute>} />
+      {/* Alias de moderación: los enlaces existentes del dashboard legacy apuntaban a rutas inexistentes.
+          Bans y moderadores se gestionan desde /admin (AdminPage). */}
+      <Route path="/dashboard/bans" element={<ProtectedRoute><Layout><ReportsPage /></Layout></ProtectedRoute>} />
+      <Route path="/dashboard/moderators" element={<ProtectedRoute><Layout><AdminPage /></Layout></ProtectedRoute>} />
       
       {/* Rutas administrativas */}
       <Route path="/admin" element={<ProtectedRoute><Layout><AdminPage /></Layout></ProtectedRoute>} />
