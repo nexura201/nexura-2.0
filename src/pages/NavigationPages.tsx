@@ -11,11 +11,14 @@ import {
   Compass, Grid3X3, Heart, Library, Play, Radio,
   Users, TrendingUp, Search, Gamepad2, MessageCircle, Music,
   Trophy, Cpu, Globe, Drama, Palette, UtensilsCrossed,
-  Sparkles, X, ArrowRight, Video, Send, Loader2, AlertTriangle, RotateCcw, Bot
+  Sparkles, X, ArrowRight, Video, Send, Loader2, AlertTriangle, RotateCcw, Bot, Trash2
 } from 'lucide-react';
 import {
   sendMessage as nexuraIASendMessage,
   NexuraIAError,
+  getNexuraIAStatus,
+  isRetryableError as isRetryableErrorCode,
+  type NexuraIAConnectionState,
 } from '../services/nexuraIA.service';
 import type { NexuraIaBehaviorId } from '../config/nexuraIA.context';
 
@@ -307,17 +310,56 @@ function CategoryCard({ category, counts }: CategoryCardProps) {
 }
 
 /**
- * Chat de NEXURA IA (Etapa 2)
+ * Chat de NEXURA IA (Etapa 3 — producto/venta)
  * ---------------------------
  * Conectado al endpoint serverless seguro POST /api/ai/chat
  * (Usuario → NEXURA IA → Backend → Gemini → respuesta).
  * La API Key nunca toca el navegador: vive solo en el servidor.
- * Sin memoria/historial persistente: el chat vive mientras el modal está abierto.
+ * Historial de SESIÓN (sin base de datos): persiste en sessionStorage mientras
+ * la pestaña esté abierta; se limpia con "Nueva conversación". El frontend
+ * envía los últimos turnos a /api/ai/chat (el backend ya los acepta).
  */
 interface NexuraIAChatMessage {
   id: string;
   role: 'user' | 'assistant';
   text: string;
+}
+
+/** Clave de sessionStorage para el historial de la sesión actual. No contiene secretos. */
+const NEXURA_IA_SESSION_KEY = 'nexura_ia_session_messages';
+
+function loadSessionMessages(): NexuraIAChatMessage[] {
+  try {
+    const raw = sessionStorage.getItem(NEXURA_IA_SESSION_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (m): m is NexuraIAChatMessage =>
+        !!m &&
+        typeof m === 'object' &&
+        (m as NexuraIAChatMessage).role !== undefined &&
+        ((m as NexuraIAChatMessage).role === 'user' || (m as NexuraIAChatMessage).role === 'assistant') &&
+        typeof (m as NexuraIAChatMessage).text === 'string' &&
+        typeof (m as NexuraIAChatMessage).id === 'string'
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveSessionMessages(messages: NexuraIAChatMessage[]) {
+  try {
+    // Ventana defensiva: solo los últimos 30 mensajes de la sesión.
+    sessionStorage.setItem(NEXURA_IA_SESSION_KEY, JSON.stringify(messages.slice(-30)));
+  } catch {
+    /* sessionStorage no disponible (modo privado lleno): la sesión sigue funcionando en memoria */
+  }
+}
+
+/** Turnos para el backend: assistant → 'model' (formato que valida api/ai/chat.ts). */
+function toBackendHistory(messages: NexuraIAChatMessage[]): { role: 'user' | 'model'; text: string }[] {
+  return messages.slice(-12).map(m => ({ role: m.role === 'assistant' ? 'model' as const : 'user' as const, text: m.text }));
 }
 
 /** Sugerencias rápidas (Fase 8): al tocarlas se envían al mismo chat existente. */
@@ -329,13 +371,19 @@ const NEXURA_IA_SUGGESTIONS = [
 ] as const;
 
 function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
-  const [messages, setMessages] = useState<NexuraIAChatMessage[]>([]);
+  const [messages, setMessages] = useState<NexuraIAChatMessage[]>(() => loadSessionMessages());
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; code: string } | null>(null);
+  // Estado de conexión REAL consultado a GET /api/ai/status (nunca se inventa).
+  const [connectionState, setConnectionState] = useState<NexuraIAConnectionState>('unknown');
   const lastUserMessageRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // AbortController de la solicitud pendiente: cancela al desmontar o cerrar el modal,
+  // evitando que respuestas antiguas sobrescriban estados nuevos.
+  const abortRef = useRef<AbortController | null>(null);
+  const requestSeqRef = useRef(0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -345,6 +393,32 @@ function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
     inputRef.current?.focus();
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Verificación real del estado de NEXURA IA al abrir el chat.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    let active = true;
+    getNexuraIAStatus({ signal: ctrl.signal }).then(r => {
+      if (active) setConnectionState(r.state);
+    });
+    return () => {
+      active = false;
+      ctrl.abort();
+    };
+  }, []);
+
+  // Cancelación segura al desmontar (cierre de modal): nunca queda una request huérfana.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
+
+  // Persistencia del historial de sesión (sessionStorage, sin base de datos).
+  useEffect(() => {
+    saveSessionMessages(messages);
+  }, [messages]);
 
   useEffect(() => {
     // Autoscroll al último mensaje
@@ -358,31 +432,66 @@ function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
 
     setError(null);
     lastUserMessageRef.current = text;
-    setMessages(prev => [...prev, { id: `u-${Date.now()}`, role: 'user', text }]);
+    // Snapshot del historial ANTES del mensaje nuevo (turnos previos para Gemini).
+    const history = toBackendHistory(messages);
+    const seq = ++requestSeqRef.current;
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setMessages(prev => [...prev, { id: `u-${Date.now()}-${seq}`, role: 'user', text }]);
     setInput('');
     setSending(true);
 
     try {
-      const result = await nexuraIASendMessage(text, { behavior: readStoredNexuraIaBehavior() });
+      const result = await nexuraIASendMessage(text, {
+        behavior: readStoredNexuraIaBehavior(),
+        history,
+        signal: controller.signal,
+      });
+      // Solo la solicitud más reciente puede escribir en la UI (evita respuestas fuera de orden).
+      if (seq !== requestSeqRef.current) return;
       setMessages(prev => [
         ...prev,
-        { id: `a-${Date.now()}`, role: 'assistant', text: result.reply },
+        { id: `a-${Date.now()}-${seq}`, role: 'assistant', text: result.reply },
       ]);
+      // Una respuesta exitosa confirma que la IA está operativa.
+      setConnectionState('connected');
     } catch (err: unknown) {
-      const message =
-        err instanceof NexuraIAError
-          ? err.message
-          : 'Ocurrió un error inesperado con NEXURA IA. Intentá nuevamente.';
-      setError(message);
+      if (err instanceof DOMException && err.name === 'AbortError') return; // cancelación intencional: sin ruido
+      if (seq !== requestSeqRef.current) return;
+      const iaErr = err instanceof NexuraIAError ? err : null;
+      const code = iaErr?.code ?? 'UNKNOWN';
+      setError({
+        message: iaErr ? iaErr.message : 'Ocurrió un error inesperado con NEXURA IA. Intentá nuevamente.',
+        code,
+      });
+      // Un fallo por configuración no configurada se refleja también en el indicador de estado.
+      if (code === 'AI_NOT_CONFIGURED') setConnectionState('not-configured');
     } finally {
-      setSending(false);
-      inputRef.current?.focus();
+      if (seq === requestSeqRef.current) {
+        setSending(false);
+        abortRef.current = null;
+        inputRef.current?.focus();
+      }
     }
   };
 
+  /** Reintento MANUAL y único por error (sin loops automáticos). */
   const handleRetry = () => {
     const last = lastUserMessageRef.current;
-    if (last) void handleSend(last);
+    if (last && !sending) void handleSend(last);
+  };
+
+  const handleClearConversation = () => {
+    abortRef.current?.abort();
+    requestSeqRef.current++;
+    setMessages([]);
+    setError(null);
+    lastUserMessageRef.current = null;
+    setSending(false);
+    setInput('');
+    try { sessionStorage.removeItem(NEXURA_IA_SESSION_KEY); } catch { /* sin persistencia disponible */ }
+    inputRef.current?.focus();
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -391,6 +500,15 @@ function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
       void handleSend();
     }
   };
+
+  const CONNECTION_DOT_UI: Record<NexuraIAConnectionState, { label: string; cls: string }> = {
+    connected: { label: 'Conectada', cls: 'bg-success' },
+    'not-configured': { label: 'No configurada', cls: 'bg-warning' },
+    error: { label: 'Error de conexión', cls: 'bg-danger' },
+    unknown: { label: 'Verificando…', cls: 'bg-text-muted' },
+  };
+  const connUi = CONNECTION_DOT_UI[connectionState];
+  const retryable = error ? isRetryableErrorCode(error.code) : false;
 
   return (
     <div
@@ -409,23 +527,55 @@ function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
               <Bot className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h4 id="nexura-ia-chat-title" className="text-sm font-bold text-white truncate">
+              <h4 id="nexura-ia-chat-title" className="text-sm font-bold text-white truncate flex items-center gap-2">
                 NEXURA IA
+                <span
+                  title={`Estado de NEXURA IA: ${connUi.label}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-semibold text-text-secondary"
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${connUi.cls} ${connectionState === 'connected' ? 'animate-pulse' : ''}`} />
+                  {connUi.label}
+                </span>
               </h4>
               <p className="text-xs text-text-muted truncate">
                 Asistente oficial — conectado de forma segura por el backend
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar NEXURA IA"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:text-white hover:border-primary/40"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearConversation}
+                aria-label="Nueva conversación con NEXURA IA"
+                className="hidden sm:inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-xs font-semibold text-text-muted transition-colors hover:text-white hover:border-primary/40"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Nueva conversación
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar NEXURA IA"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:text-white hover:border-primary/40"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Aviso claro cuando Gemini no está configurado (informativo, no bloqueante) */}
+        {connectionState === 'not-configured' && (
+          <div className="flex items-start gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2.5 sm:px-5 text-xs text-warning">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <p>
+              NEXURA IA todavía no está activa: falta configurar <code className="font-mono">GEMINI_API_KEY</code> en
+              el servidor (Vercel → Settings → Environment Variables) y redeployar. Es una variable exclusiva del
+              administrador; nunca se expone al navegador.
+            </p>
+          </div>
+        )}
 
         {/* Mensajes */}
         <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4 sm:px-5 space-y-3">
@@ -483,16 +633,18 @@ function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
               <div className="flex max-w-[90%] items-start gap-2 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <div>
-                  <p>{error}</p>
-                  <button
-                    type="button"
-                    onClick={handleRetry}
-                    disabled={!lastUserMessageRef.current}
-                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning transition-colors hover:bg-warning/20 disabled:opacity-40"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Reenviar mensaje
-                  </button>
+                  <p>{error.message}</p>
+                  {retryable && (
+                    <button
+                      type="button"
+                      onClick={handleRetry}
+                      disabled={!lastUserMessageRef.current || sending}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning transition-colors hover:bg-warning/20 disabled:opacity-40"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Reintentar
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -537,8 +689,32 @@ function NexuraIAChatModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Estado de la tarjeta NEXURA IA según el estado REAL del backend (nunca se inventa). */
+const IA_CARD_STATUS_UI: Record<NexuraIAConnectionState, { label: string; cls: string }> = {
+  connected: { label: 'IA conectada', cls: 'text-success' },
+  'not-configured': { label: 'IA no configurada', cls: 'text-warning' },
+  error: { label: 'IA con error de conexión', cls: 'text-danger' },
+  unknown: { label: 'Verificando IA…', cls: 'text-text-muted' },
+};
+
 function NexuraIACard() {
   const [showChat, setShowChat] = useState(false);
+  // Estado real consultado a GET /api/ai/status al montar la página de Categorías.
+  const [connectionState, setConnectionState] = useState<NexuraIAConnectionState>('unknown');
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    let active = true;
+    getNexuraIAStatus({ signal: ctrl.signal }).then(r => {
+      if (active) setConnectionState(r.state);
+    });
+    return () => {
+      active = false;
+      ctrl.abort();
+    };
+  }, []);
+
+  const statusUi = IA_CARD_STATUS_UI[connectionState];
 
   return (
     <>
@@ -570,9 +746,15 @@ function NexuraIACard() {
             El asistente oficial de NEXURA. Preguntá lo que necesites sobre la plataforma, streaming y creación de contenido.
           </p>
 
-          <div className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-primary">
-            Abrir asistente
-            <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1" />
+          <div className="mt-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+              Abrir asistente
+              <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1" />
+            </div>
+            <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${statusUi.cls}`}>
+              <span className={`w-1.5 h-1.5 rounded-full bg-current ${connectionState === 'connected' ? 'animate-pulse' : ''}`} />
+              {statusUi.label}
+            </span>
           </div>
         </div>
       </button>

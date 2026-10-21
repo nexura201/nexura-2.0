@@ -100,6 +100,18 @@ cp .env.example .env
 
 Edita `.env` con tus valores reales. **Nunca subas `.env` al repositorio.**
 
+### NEXURA IA (Google Gemini) — configuración para el comprador/administrador
+
+NEXURA IA funciona mediante una Serverless Function de Vercel (`api/ai/chat.ts`). Para activarla:
+
+1. Creá una API key de Gemini en Google AI Studio / Google Cloud.
+2. En Vercel: **Project → Settings → Environment Variables**, agregá `GEMINI_API_KEY` (scope Production/Preview/Development).
+   - **Sin prefijo `VITE_`** y **nunca** en código ni en el navegador: la key vive solo del lado servidor.
+3. Opcional: `GEMINI_MODEL` (default `gemini-2.5-flash`) y `NEXURA_IA_BEHAVIOR` (`concisa|equilibrada|detallada`).
+4. Redeployá. Verificá con `GET /api/ai/status` → `{ "ok": true, "configured": true }`.
+
+Sin `GEMINI_API_KEY`, la app sigue funcionando: el chat muestra un aviso claro ("IA no configurada") indicando exactamente qué debe hacer el administrador. El historial del chat es de sesión (no requiere base de datos).
+
 ## 🔧 Scripts disponibles
 
 - `npm run dev` - Inicia el servidor de desarrollo

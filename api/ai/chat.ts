@@ -138,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!apiKey) {
       // No logueamos ni exponemos valores; solo el nombre de la variable faltante.
       console.error('[NEXURA IA] Config faltante: variable de entorno GEMINI_API_KEY no definida en el servidor.');
-      res.status(500).json({ ok: false, error: 'AI_NOT_CONFIGURED' });
+      res.status(503).json({ ok: false, error: 'AI_NOT_CONFIGURED' });
       return;
     }
 
@@ -179,7 +179,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Manejo defensivo: nunca reenviamos el detalle interno al navegador
     // (podría contener información de la cuenta/proveedor).
     const name = err && typeof err === 'object' && 'name' in err ? String((err as { name: unknown }).name) : 'Error';
-    console.error(`[NEXURA IA] Error al procesar la solicitud (${name}).`);
-    res.status(502).json({ ok: false, error: 'AI_UPSTREAM_ERROR' });
+    // Mensaje del SDK de Gemini (sin secretos): se usa SOLO para clasificar el código público.
+    const msg = err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message ?? '') : '';
+
+    // Clasificación pública sin exponer detalles de la cuenta/proveedor:
+    // - 401/403 o "API key" inválida → problema de configuración del servidor.
+    // - 429 / "quota" / "rate limit" → límite temporal de uso.
+    let publicCode = 'AI_UPSTREAM_ERROR';
+    if (/\b(401|403)\b/.test(msg) || /api key/i.test(msg)) publicCode = 'AI_AUTH_ERROR';
+    else if (/\b429\b/.test(msg) || /quota|rate.?limit|too many/i.test(msg)) publicCode = 'AI_RATE_LIMIT';
+
+    console.error(`[NEXURA IA] Error al procesar la solicitud (${name}) → ${publicCode}.`);
+    res.status(publicCode === 'AI_RATE_LIMIT' ? 429 : publicCode === 'AI_AUTH_ERROR' ? 502 : 502).json({ ok: false, error: publicCode });
   }
 }

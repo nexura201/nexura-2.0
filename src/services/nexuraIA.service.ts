@@ -16,8 +16,9 @@
  *    localStorage/sessionStorage.
  *  - Este servicio no imprime secretos; solo códigos de error públicos.
  *
- * ALCANCE Etapa 2: un mensaje → una respuesta. Sin memoria, sin historial
- * persistente, sin imágenes, sin voz, sin herramientas externas.
+ * ALCANCE Etapa 3 (producto/venta): chat con historial de SESIÓN (sin DB),
+ * timeout con AbortController, reintento único manual y estado de conexión
+ * real vía /api/ai/status. Sin imágenes, sin voz, sin herramientas externas.
  */
 
 import {
@@ -58,29 +59,48 @@ const CHAT_ENDPOINT = '/api/ai/chat';
 const STATUS_ENDPOINT = '/api/ai/status';
 const MAX_MESSAGE_LENGTH = NEXURA_IA_DEFAULTS.maxMessageLength; // Coincide con la validación del backend.
 
+/** Turno de historial que entiende el backend (api/ai/chat.ts): role 'user' | 'model'. */
+export interface NexuraIAHistoryTurn {
+  role: 'user' | 'model';
+  text: string;
+}
+
 /** Traducción de códigos de error del backend a mensajes amigables. */
 const FRIENDLY_ERRORS: Record<string, string> = {
   MESSAGE_REQUIRED: 'Escribí un mensaje para poder responder.',
   MESSAGE_TOO_LONG: 'Tu mensaje es demasiado largo. Probá con uno más corto (máximo 4.000 caracteres).',
   METHOD_NOT_ALLOWED: 'No se pudo procesar la solicitud. Intentá de nuevo.',
-  AI_NOT_CONFIGURED: 'NEXURA IA todavía no está configurada en el servidor. Volvé a intentar más tarde.',
+  AI_NOT_CONFIGURED: 'NEXURA IA no está configurada en el servidor. El administrador debe definir GEMINI_API_KEY en Vercel (Project → Settings → Environment Variables) y redeployar.',
   EMPTY_AI_RESPONSE: 'NEXURA IA no pudo generar una respuesta. Probá enviando el mensaje de nuevo.',
   AI_UPSTREAM_ERROR: 'Hubo un problema conectando con NEXURA IA. Revisá tu conexión e intentá otra vez.',
+  AI_AUTH_ERROR: 'El servidor rechazó la configuración de NEXURA IA (API key inválida o sin permiso). Contactá al administrador.',
+  AI_RATE_LIMIT: 'NEXURA IA recibió demasiadas solicitudes recientemente. Esperá unos segundos e intentá de nuevo.',
   NETWORK_ERROR: 'No se pudo conectar con el servidor de NEXURA IA. Verificá tu conexión e intentá de nuevo.',
   TIMEOUT: 'NEXURA IA tardó demasiado en responder. Intentá nuevamente.',
+  ABORTED: 'La solicitud fue cancelada.',
 };
 
 export function friendlyErrorMessage(code: string): string {
   return FRIENDLY_ERRORS[code] ?? 'Ocurrió un error inesperado con NEXURA IA. Intentá nuevamente.';
 }
 
+/** Timeout defensivo del cliente: si el serverless tarda más, se cancela la espera. */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 /**
  * Envía un mensaje de texto al backend seguro y devuelve la respuesta de Gemini.
  * Lanza NexuraIAError con código y mensaje amigable ante cualquier fallo.
+ * - `history`: turnos previos de la sesión (el backend ya los acepta; ventana 12).
+ * - `signal`: AbortControllextorno del llamante (cierre de modal/desmonte).
+ * - Timeout interno: si excede REQUEST_TIMEOUT_MS → código TIMEOUT (reintentable).
  */
 export async function sendMessage(
   message: string,
-  opts: { signal?: AbortSignal; behavior?: NexuraIaBehaviorId } = {}
+  opts: {
+    signal?: AbortSignal;
+    behavior?: NexuraIaBehaviorId;
+    history?: NexuraIAHistoryTurn[];
+  } = {}
 ): Promise<NexuraIAChatResult> {
   const trimmed = message.trim();
 
@@ -91,17 +111,48 @@ export async function sendMessage(
     throw new NexuraIAError('MESSAGE_TOO_LONG', friendlyErrorMessage('MESSAGE_TOO_LONG'));
   }
 
+  // Historial de sesión: solo turnos válidos no vacíos, ventana últimos 12 (igual que el backend).
+  const history: NexuraIAHistoryTurn[] = (opts.history ?? [])
+    .filter(t => t && typeof t.text === 'string' && t.text.trim().length > 0 && (t.role === 'user' || t.role === 'model'))
+    .slice(-12);
+
+  // Combinamos el signal externo con un timeout propio sin depender de AbortSignal.any
+  // (compatibilidad con navegadores objetivo).
+  const controller = new AbortController();
+  const onExternalAbort = () => controller.abort();
+  if (opts.signal) {
+    if (opts.signal.aborted) {
+      throw new NexuraIAError('ABORTED', friendlyErrorMessage('ABORTED'));
+    }
+    opts.signal.addEventListener('abort', onExternalAbort);
+  }
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+
   let res: Response;
   try {
     res = await fetch(CHAT_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: trimmed, ...(opts.behavior ? { behavior: opts.behavior } : {}) }),
-      signal: opts.signal,
+      body: JSON.stringify({
+        message: trimmed,
+        ...(history.length > 0 ? { history } : {}),
+        ...(opts.behavior ? { behavior: opts.behavior } : {}),
+      }),
+      signal: controller.signal,
     });
   } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      if (timedOut) throw new NexuraIAError('TIMEOUT', friendlyErrorMessage('TIMEOUT'));
+      throw new NexuraIAError('ABORTED', friendlyErrorMessage('ABORTED'));
+    }
     throw new NexuraIAError('NETWORK_ERROR', friendlyErrorMessage('NETWORK_ERROR'));
+  } finally {
+    clearTimeout(timer);
+    if (opts.signal) opts.signal.removeEventListener('abort', onExternalAbort);
   }
 
   let data: { ok?: boolean; reply?: string; model?: string; behavior?: string; timestamp?: string; error?: string } = {};
@@ -116,7 +167,16 @@ export async function sendMessage(
   }
 
   if (!res.ok || !data.ok || typeof data.reply !== 'string' || !data.reply.trim()) {
-    const code = typeof data.error === 'string' ? data.error : `HTTP_${res.status}`;
+    // Mapeo defensivo por status HTTP cuando el backend no envía código explícito:
+    // 401/403 → problema de configuración del servidor (NO reintentar en bucle);
+    // 429 → rate limit (temporal, reintento manual tras espera);
+    // 5xx → upstream.
+    let code = typeof data.error === 'string' && data.error ? data.error : `HTTP_${res.status}`;
+    if (code.startsWith('HTTP_')) {
+      if (res.status === 401 || res.status === 403) code = 'AI_AUTH_ERROR';
+      else if (res.status === 429) code = 'AI_RATE_LIMIT';
+      else if (res.status >= 500) code = 'AI_UPSTREAM_ERROR';
+    }
     throw new NexuraIAError(code, friendlyErrorMessage(code));
   }
 
@@ -171,5 +231,18 @@ export async function getNexuraIAStatus(opts: { signal?: AbortSignal } = {}): Pr
   };
 }
 
-export const NexuraIAService = { sendMessage, friendlyErrorMessage, getNexuraIAStatus };
+/** Códigos de error que NO conviene reintentar automáticamente (configuración/validación). */
+export const NON_RETRYABLE_ERROR_CODES = new Set([
+  'AI_NOT_CONFIGURED',
+  'AI_AUTH_ERROR',
+  'MESSAGE_REQUIRED',
+  'MESSAGE_TOO_LONG',
+  'METHOD_NOT_ALLOWED',
+]);
+
+export function isRetryableError(code: string): boolean {
+  return !NON_RETRYABLE_ERROR_CODES.has(code);
+}
+
+export const NexuraIAService = { sendMessage, friendlyErrorMessage, getNexuraIAStatus, isRetryableError };
 export default NexuraIAService;
