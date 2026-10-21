@@ -53,7 +53,11 @@ export class MediaServerService {
         rtmpUrl: 'rtmp://localhost:1935/live',
         hlsUrl: 'http://localhost:8888/live',
         apiUrl: 'http://localhost:9997',
-        status: 'UP',
+        // Etapa 4: el servidor demo default NUNCA se presenta como operativo.
+        // No existe health check real; declarar 'DOWN' evita cualquier lectura
+        // visual de "Online" en paneles. Reemplazar registrando un servidor
+        // propio (Owner → Servers) que apunte a infraestructura real.
+        status: 'DOWN',
         capacity: 100,
         currentLoad: 0,
         activeStreams: 0,

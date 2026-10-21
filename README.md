@@ -138,6 +138,33 @@ nexura/
 └── .env.example                # Variables de entorno de ejemplo
 ```
 
+## 📡 Infraestructura de streaming (RTMP/HLS)
+
+NEXURA **no incluye un servidor RTMP/HLS propio**. La plataforma está preparada para conectar la infraestructura de streaming que el comprador despliegue y mantenga por separado.
+
+### Variables de configuración
+
+| Variable | Qué representa | Ejemplo |
+|---|---|---|
+| `VITE_RTMP_SERVER_URL` | URL de **ingestión** RTMP: la que se pega en OBS/Streamlabs como "Servidor". | `rtmp://stream.tu-dominio.ejemplo/live` |
+| `VITE_HLS_BASE_URL` | Base pública de **reproducción** HLS donde el servidor publica los playlists `.m3u8`. | `https://stream.tu-dominio.ejemplo/hls` |
+
+Se configuran en `.env.local` (desarrollo) o en las Environment Variables del proyecto en Vercel (producción), y requieren un rebuild/redeploy porque quedan embebidas en el bundle. Pueden definirse también desde **Owner → Servers** (`/owner/servers`), que registra servidores en el pool local; las variables `VITE_*` tienen prioridad.
+
+⚠️ **Seguridad:** son variables `VITE_*`, visibles en el frontend. Colocar **solo URLs públicas**. Nunca secretos, tokens ni credenciales.
+
+### Sin configurar = modo demo honesto
+
+Si no definís ninguna URL, NEXURA usa un fallback claramente etiquetado **"DEMO"** (`localhost`) en las pantallas de streaming, y el reproductor muestra **"Streaming no configurado"** en lugar de intentar conectarse a un servidor inexistente. No se simula infraestructura real.
+
+### MediaMTX (una opción posible)
+
+[MediaMTX](https://github.com/bluenviron/mediamtx) es un servidor open-source compatible que puede servir tanto la ingestión RTMP (puerto 1935, ruta `/live`) como la salida HLS (puerto 8888, ruta `/hls`). Su despliegue queda a cargo del comprador: **este repositorio no lo instala, lo despliega ni lo ejecuta**. Una vez tengas tu servidor funcionando, apuntá las dos variables anteriores a él.
+
+### Importante: "Configurado" ≠ "Online"
+
+La app reporta el estado de la infraestructura como **Configurado** cuando existe una URL definida. Eso **no** afirma que el servidor responda: el health check real (verificación de conectividad y webhooks de eventos start/stop) queda pendiente para una futura etapa/backend. Ninguna pantalla debe mostrar — ni mostró — un falso "Online".
+
 ## ⚠️ Notas importantes
 
 ### GitHub Pages

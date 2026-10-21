@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import * as streaming from '../services/streaming';
 import * as db from '../services/database';
+import { getStreamingConfigStatus } from '../config/streaming';
 import type { Stream } from '../types';
 import {
   Radio, Play, Square, Activity, AlertTriangle,
@@ -119,6 +120,32 @@ export function StreamTestPage() {
       {/* Current Status */}
       <div className="bg-bg-card border border-border rounded-xl p-6 mb-6">
         <h2 className="text-lg font-semibold text-white mb-4">Estado Actual</h2>
+        {/* Etapa 4: estado de infraestructura de streaming (configuración, no conectividad) */}
+        {(() => {
+          const st = getStreamingConfigStatus();
+          return st.configured ? (
+            <div className="mb-4 flex items-start gap-3 p-3 bg-success/10 border border-success/30 rounded-lg">
+              <span className="mt-0.5 w-2 h-2 rounded-full bg-success shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-success">Infraestructura configurada</p>
+                <p className="text-xs text-text-secondary mt-0.5 break-all">RTMP: {st.rtmpUrl}</p>
+                <p className="text-xs text-text-muted">Nota: "Configurado" indica que existe una URL definida; esta página no verifica que el servidor esté online.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-4 flex items-start gap-3 p-3 bg-warning/10 border border-warning/30 rounded-lg">
+              <span className="mt-0.5 w-2 h-2 rounded-full bg-warning shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-warning">Demo — Infraestructura de streaming no configurada</p>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Esta simulación usa endpoints locales de ejemplo. Para streaming real, configura{' '}
+                  <code className="text-[11px] bg-bg-elevated px-1 rounded">VITE_RTMP_SERVER_URL</code> y{' '}
+                  <code className="text-[11px] bg-bg-elevated px-1 rounded">VITE_HLS_BASE_URL</code> o registra un servidor en Owner → Servers.
+                </p>
+              </div>
+            </div>
+          );
+        })()}
         <div className="flex items-center gap-3">
           {status === 'idle' && (
             <>

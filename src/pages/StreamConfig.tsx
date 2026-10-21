@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import * as streaming from '../services/streaming';
 import * as db from '../services/database';
+import { isDemoRtmpUrl } from '../config/streaming';
 import {
   Radio, Key, Copy, RefreshCw, Eye, EyeOff, AlertTriangle,
   Check, Settings, Monitor, Play, Info
@@ -200,6 +201,9 @@ export function StreamConfigPage() {
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
           <Monitor className="w-5 h-5 text-primary-light" />
           Servidor RTMP
+          {isDemoRtmpUrl(streamConfig.rtmpServerUrl) && (
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-warning/15 text-warning px-2 py-0.5 rounded-full">Demo</span>
+          )}
         </h2>
         <div className="space-y-4">
           <div>
@@ -220,6 +224,16 @@ export function StreamConfigPage() {
               </button>
             </div>
           </div>
+          {isDemoRtmpUrl(streamConfig.rtmpServerUrl) && (
+            <p className="text-xs text-text-muted flex items-start gap-1.5">
+              <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <span>
+                Esta es una URL de ejemplo local, no un servidor real. La infraestructura RTMP/HLS se configura por separado mediante{' '}
+                <code className="bg-bg-elevated px-1 rounded">VITE_RTMP_SERVER_URL</code> / <code className="bg-bg-elevated px-1 rounded">VITE_HLS_BASE_URL</code>{' '}
+                o desde Owner → Servers. Copiar esta clave a OBS no iniciará una transmisión hasta que exista infraestructura configurada.
+              </span>
+            </p>
+          )}
         </div>
       </div>
 

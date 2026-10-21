@@ -91,6 +91,7 @@ import { OwnerDashboardPage } from './pages/owner/OwnerDashboard';
 import { OwnerUsersPage, OwnerUserDetailPage } from './pages/owner/OwnerUsersPage';
 import { OwnerChannelsPage, OwnerLivesPage, OwnerReelsPage, OwnerCalendarPage } from './pages/owner/OwnerContentPages';
 import { OwnerSettingsPage, OwnerSecurityPage, OwnerActivityPage } from './pages/owner/OwnerSettingsPage';
+import { OwnerServersPage } from './pages/owner/OwnerServersPage';
 import { StatusPage } from './pages/StatusPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
@@ -230,8 +231,8 @@ function AppRoutes() {
       <Route path="/owner/activity" element={<OwnerRoute><OwnerActivityPage /></OwnerRoute>} />
       <Route path="/owner/infrastructure" element={<OwnerRoute><InfrastructureDashboardPage /></OwnerRoute>} />
       <Route path="/owner/infrastructure/queues" element={<OwnerRoute><QueueDashboardPage /></OwnerRoute>} />
-      {/* Secciones estructurales en preparación (sin funcionalidad simulada) */}
-      <Route path="/owner/servers" element={<OwnerRoute><OwnerComingSoon title="Servidores" /></OwnerRoute>} />
+      {/* Etapa 4: pantalla de configuración de infraestructura RTMP/HLS */}
+      <Route path="/owner/servers" element={<OwnerRoute><OwnerServersPage /></OwnerRoute>} />
       
       {/* Páginas de error */}
       <Route path="/401" element={<UnauthorizedPage />} />

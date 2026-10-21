@@ -4,6 +4,7 @@ import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   Settings, Radio, AlertCircle, Loader2
 } from 'lucide-react';
+import { isDemoHlsUrl } from '../config/streaming';
 
 interface VideoPlayerProps {
   src: string;
@@ -15,12 +16,15 @@ export function VideoPlayer({ src, channelName, isLive = true }: VideoPlayerProp
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  // Contador de requests para que solo el último intento activo pueda setear estado.
+  const attemptRef = useRef(0);
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isNotConfigured, setIsNotConfigured] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showControls, setShowControls] = useState(true);
 
@@ -28,10 +32,24 @@ export function VideoPlayer({ src, channelName, isLive = true }: VideoPlayerProp
     const video = videoRef.current;
     if (!video || !src) return;
 
+    const attempt = ++attemptRef.current;
+    const isCurrent = () => attempt === attemptRef.current;
+
     // Cleanup previous instance
     if (hlsRef.current) {
       hlsRef.current.destroy();
+      hlsRef.current = null;
     }
+
+    // ETAPA 4: sin infraestructura HLS configurada no intentamos reproducir
+    // contra localhost. Mostramos un estado claro y elegante, no un error técnico.
+    if (isDemoHlsUrl(src)) {
+      setIsNotConfigured(true);
+      setError(null);
+      setIsLoading(false);
+      return () => { /* nothing attached */ };
+    }
+    if (isCurrent()) setIsNotConfigured(false);
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -46,23 +64,24 @@ export function VideoPlayer({ src, channelName, isLive = true }: VideoPlayerProp
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (!isCurrent()) return;
         setIsLoading(false);
         video.play().catch(() => {
           // Autoplay might be blocked
-          setIsPlaying(false);
+          if (isCurrent()) setIsPlaying(false);
         });
       });
 
       hls.on(Hls.Events.ERROR, (event: any, data: any) => {
         console.error('[HLS] Error:', data);
+        if (!isCurrent()) return;
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              setError('Error de red. Intentando reconectar...');
-              hls.startLoad();
+              setError('No se pudo conectar al servidor de streaming. Verificá que la infraestructura HLS esté en línea y que el canal esté transmitiendo.');
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-              setError('Error de media. Intentando recuperar...');
+              setError('Error de media al reproducir el stream. Intentá nuevamente en unos segundos.');
               hls.recoverMediaError();
               break;
             default:
@@ -78,8 +97,14 @@ export function VideoPlayer({ src, channelName, isLive = true }: VideoPlayerProp
       // Native HLS support (Safari)
       video.src = src;
       video.addEventListener('loadedmetadata', () => {
+        if (!isCurrent()) return;
         setIsLoading(false);
         video.play().catch(() => setIsPlaying(false));
+      });
+      video.addEventListener('error', () => {
+        if (!isCurrent()) return;
+        setError('No se pudo conectar al servidor de streaming. Verificá que la infraestructura HLS esté en línea y que el canal esté transmitiendo.');
+        setIsLoading(false);
       });
     } else {
       setError('Tu navegador no soporta reproducción HLS.');
@@ -88,6 +113,7 @@ export function VideoPlayer({ src, channelName, isLive = true }: VideoPlayerProp
     return () => {
       if (hlsRef.current) {
         hlsRef.current.destroy();
+        hlsRef.current = null;
       }
     };
   }, [src]);
@@ -150,14 +176,54 @@ export function VideoPlayer({ src, channelName, isLive = true }: VideoPlayerProp
     setTimeout(() => setShowControls(false), 3000);
   };
 
+  if (isNotConfigured) {
+    return (
+      <div className="aspect-video bg-bg-elevated rounded-xl flex items-center justify-center border border-border">
+        <div className="text-center max-w-sm px-6">
+          <Radio className="w-14 h-14 text-text-muted mx-auto mb-4" />
+          <p className="text-white font-semibold mb-1">Streaming no configurado</p>
+          <p className="text-text-secondary text-sm leading-relaxed">
+            El servidor de streaming todavía no está configurado. Esta instalación está preparada
+            para conectar una infraestructura RTMP/HLS externa (por ejemplo MediaMTX).
+          </p>
+          <span className="inline-block mt-3 text-[10px] font-bold uppercase tracking-wider bg-warning/15 text-warning px-2 py-0.5 rounded-full">
+            Demo — Infraestructura no configurada
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="aspect-video bg-bg-elevated rounded-xl flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="w-16 h-16 text-danger mx-auto mb-4" />
-          <p className="text-text-secondary mb-2">{error}</p>
+        <div className="text-center max-w-sm px-6">
+          <AlertCircle className="w-14 h-14 text-danger mx-auto mb-4" />
+          <p className="text-white font-semibold mb-1">No se pudo cargar el stream</p>
+          <p className="text-text-secondary text-sm mb-3 leading-relaxed">{error}</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              // Reintento sin recargar la página completa: dispara un nuevo attempt.
+              setError(null);
+              setIsLoading(true);
+              attemptRef.current++;
+              const video = videoRef.current;
+              if (video && src && Hls.isSupported()) {
+                if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+                const attempt = ++attemptRef.current;
+                const hls = new Hls({ enableWorker: true, lowLatencyMode: true, backBufferLength: 30 });
+                hls.loadSource(src);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => { if (attempt === attemptRef.current) setIsLoading(false); });
+                hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
+                  if (attempt !== attemptRef.current) return;
+                  if (data.fatal) { setError('Error al cargar el stream. Verifica que el canal esté en vivo.'); hls.destroy(); setIsLoading(false); }
+                });
+                hlsRef.current = hls;
+              } else if (video) {
+                video.load();
+              }
+            }}
             className="text-primary-light hover:text-primary text-sm"
           >
             Reintentar
