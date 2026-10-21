@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Stream, StreamSession, StreamKey, StreamStatus, ViewerCount } from '../types';
 import * as db from './database';
+import { getRtmpServerUrl, buildHlsPlaybackUrl } from '../config/streaming';
 
 // ============ STORAGE KEYS ============
 const STREAM_KEYS = {
@@ -11,9 +12,12 @@ const STREAM_KEYS = {
 };
 
 // ============ CONFIGURATION ============
+// ETAPA 4: las URLs de streaming (RTMP/HLS) ya NO están hardcodeadas aquí.
+// Se resuelven centralmente en src/config/streaming.ts mediante
+// VITE_RTMP_SERVER_URL / VITE_HLS_BASE_URL (con fallback demo etiquetado).
+// Los tiempos de sesión/heartbeat siguen siendo locales del servicio.
 const CONFIG = {
-  rtmpServerUrl: 'rtmp://localhost:1935/live',
-  hlsBaseUrl: 'http://localhost:8888',
+  get rtmpServerUrl(): string { return getRtmpServerUrl(); },
   sessionTimeout: 30000, // 30s
   reconnectGracePeriod: 10000, // 10s
   heartbeatInterval: 5000, // 5s
@@ -410,12 +414,12 @@ export function getStreamConfig(channelId: string): { rtmpServerUrl: string; hls
   
   return {
     rtmpServerUrl: CONFIG.rtmpServerUrl,
-    hlsPlaybackUrl: `${CONFIG.hlsBaseUrl}/hls/${channel.slug}`,
+    hlsPlaybackUrl: buildHlsPlaybackUrl(channel.slug),
   };
 }
 
 export function getPlaybackUrl(channelSlug: string): string {
-  return `${CONFIG.hlsBaseUrl}/hls/${channelSlug}/index.m3u8`;
+  return buildHlsPlaybackUrl(channelSlug);
 }
 
 // ============ HEALTH CHECK ============
