@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { SupportFloatingButton } from './SupportFloatingButton';
+import { DemoBanner } from './DemoBanner';
 import {
   Home, Compass, Grid3X3, Heart, Library, LayoutDashboard,
   Settings, LogOut, Menu, X, Search, Bell, User, ChevronDown,
@@ -153,6 +154,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <div className="flex-1 lg:ml-60 flex flex-col min-h-screen">
+        {/* Etapa 5: indicador global del modo demo (solo visible si DEMO_MODE activo) */}
+        <DemoBanner />
         {/* Header */}
         <header className="sticky top-0 z-30 bg-surface/80 backdrop-blur-lg border-b border-surface-2">
           <div className="flex items-center justify-between h-14 px-4">

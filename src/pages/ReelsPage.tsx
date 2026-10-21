@@ -5,6 +5,9 @@ import { useToast } from '../context/ToastContext';
 import * as reelService from '../services/reel';
 import * as db from '../services/database';
 import type { Reel, Channel, User } from '../types';
+// Etapa 5: identificación de contenido demo
+import { isDemoMode } from '../config/demoMode';
+import { DEMO_USERNAME_PREFIX } from '../services/demoData';
 import {
   Play, Pause, Volume2, VolumeX, Heart, Share2, Eye,
   ChevronUp, ChevronDown, Loader2, Film
@@ -140,7 +143,7 @@ function ReelCard({
         <div className="min-w-0">
           {profilePath ? (
             <Link to={profilePath} className="pointer-events-auto block truncate text-sm font-semibold text-white hover:underline">
-              @{creator?.username || displayName}
+              @{creator?.username || displayName}{isDemoMode() && creator?.username.startsWith(DEMO_USERNAME_PREFIX) ? ' · DEMO' : ''}
             </Link>
           ) : (
             <span className="block truncate text-sm font-semibold text-white">@{creator?.username || displayName}</span>

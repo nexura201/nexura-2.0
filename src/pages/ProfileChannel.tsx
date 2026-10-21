@@ -7,6 +7,9 @@ import * as streaming from '../services/streaming';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { ChatPanel } from '../components/ChatPanel';
 import type { User, Channel } from '../types';
+// Etapa 5: identificación de contenido demo
+import { isDemoMode } from '../config/demoMode';
+import { DEMO_USERNAME_PREFIX } from '../services/demoData';
 import {
   Users, UserPlus, UserMinus, Share2, Radio, MapPin,
   Calendar, ExternalLink, Play, Video, Scissors, Info,
@@ -276,10 +279,11 @@ export function ChannelPage() {
                 <span className="bg-danger text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                   LIVE
+                  {isDemoMode() && profileUser.username.startsWith(DEMO_USERNAME_PREFIX) ? ' · DEMO' : ''}
                 </span>
               )}
             </div>
-            <p className="text-text-muted text-sm">@{profileUser.username} • {followerCount} seguidores</p>
+            <p className="text-text-muted text-sm">@{profileUser.username} • {followerCount} seguidores{isDemoMode() && profileUser.username.startsWith(DEMO_USERNAME_PREFIX) ? ' · DEMO' : ''}</p>
           </div>
           <div className="flex items-center gap-2">
             {currentUser && currentUser.id !== profileUser.id && (
