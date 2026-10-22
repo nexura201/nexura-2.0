@@ -216,6 +216,43 @@ export function getAllVideos(): Video[] {
   return videos.filter(v => v.status === 'READY' && v.visibility === 'PUBLIC');
 }
 
+/**
+ * Etapa 6 — Biblioteca del creador: TODOS los VODs propios (incluye
+ * PROCESSING/PRIVATE/borradores), excluyendo los eliminados. La visibilidad
+ * ampliada es solo para el autor del canal (la vista pública sigue usando
+ * getAllVideos/getChannelVideos).
+ *
+ * [FUTURO BACKEND] Reemplazar por GET /api/videos?channelId=...&scope=owner
+ */
+export function getVideosForLibraryForOwner(userId: string): Video[] {
+  const channel = db.getChannelByUserId(userId);
+  if (!channel) return [];
+  const videos = getCollection<Video>(VIDEO_KEYS.videos);
+  return videos
+    .filter(v => v.channelId === channel.id && v.status !== 'DELETED')
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+}
+
+/**
+ * Etapa 6 — Actualizar metadatos locales de un VOD (título/descripción).
+ * Persiste en localStorage; sin backend, la edición es solo local.
+ */
+export function updateVideoMetadata(videoId: string, updates: { title?: string; description?: string }): Video {
+  return updateVideo(videoId, updates);
+}
+
+/**
+ * Etapa 6 — Toggle de visibilidad local (publicar/ocultar) desde la Biblioteca.
+ * Cambiar a PRIVATE/UNLISTED equivale a "oculto"; PUBLIC equivale a "publicado".
+ */
+export function setVideoVisibility(videoId: string, visibility: VideoVisibility): Video {
+  const updates: Partial<Video> = { visibility };
+  if (visibility === 'PUBLIC' && !getVideoById(videoId)?.publishedAt) {
+    updates.publishedAt = new Date().toISOString();
+  }
+  return updateVideo(videoId, updates);
+}
+
 // ============ UTILITY FUNCTIONS ============
 
 function getCollection<T>(key: string): T[] {

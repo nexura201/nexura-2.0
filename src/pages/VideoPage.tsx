@@ -4,7 +4,20 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import * as videoService from '../services/video';
 import * as db from '../services/database';
+import { DEMO_USERNAME_PREFIX } from '../services/demoData';
+import { formatContentDuration, deriveContentState } from '../services/content';
+import { ContentStateChip } from '../components/ContentStateChip';
+import { DemoBadge } from '../components/DemoBadge';
 import type { Video, User, Channel } from '../types';
+
+/**
+ * Etapa 6 — Los VOD demo del seed son PUBLIC por defecto; esta helper deja
+ * claro que no hay ninguna otra exención de visibilidad. (Mantener explícito
+ * para cuando exista backend real: ahí la regla vive en la API.)
+ */
+function isDemoPublicVod(v: Video): boolean {
+  return v.storageKey?.startsWith('videos/demo/') ?? false;
+}
 import {
   Play, Calendar, Eye, Share2, Flag, UserPlus, UserCheck,
   Edit, Trash2, Clock, Tag
@@ -21,11 +34,22 @@ export function VideoPage() {
   const [channelUser, setChannelUser] = useState<User | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Hooks de edición declarados aquí (Rules of Hooks: orden estable entre renders).
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  useEffect(() => {
+    if (video) { setEditTitle(video.title); setEditDesc(video.description); setEditing(false); }
+  }, [video?.id, video?.title, video?.description]);
 
   useEffect(() => {
     if (id) {
       const v = videoService.getVideoById(id);
-      if (v && v.status === 'READY') {
+      // Owner/admin puede ver su propio contenido PRIVATE/UNLISTED por enlace.
+      const ownerChannelId = user ? db.getChannelByUserId(user.id)?.id : undefined;
+      const isOwnerOfLoaded = !!v && (!!user && (v.channelId === ownerChannelId || user.role === 'OWNER' || user.role === 'ADMIN'));
+      const publiclyVisible = !!v && (v.visibility === 'PUBLIC' || isDemoPublicVod(v) || isOwnerOfLoaded);
+      if (v && v.status === 'READY' && publiclyVisible) {
         setVideo(v);
         
         // Get channel info
@@ -115,23 +139,58 @@ export function VideoPage() {
   }
 
   const isOwner = user && (video.channelId === db.getChannelByUserId(user.id)?.id || user.role === 'OWNER' || user.role === 'ADMIN');
+  const hasMedia = !!video.videoUrl;
+  const isDemoVod = channelUser?.username.startsWith(DEMO_USERNAME_PREFIX) ?? false;
+
+  // Edición local (persiste en localStorage vía services/video.updateVideoMetadata)
+
+
+  const saveEdit = () => {
+    try {
+      videoService.updateVideoMetadata(video.id, { title: editTitle.trim() || video.title, description: editDesc });
+      setVideo({ ...video, title: editTitle.trim() || video.title, description: editDesc });
+      setEditing(false);
+      addToast('success', 'Cambios guardados localmente');
+    } catch {
+      addToast('error', 'No se pudieron guardar los cambios');
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Video Player */}
-      <div className="aspect-video bg-bg-elevated rounded-xl mb-6 flex items-center justify-center">
-        <div className="text-center">
-          <Play className="w-16 h-16 text-primary-light mx-auto mb-4" />
-          <p className="text-text-secondary">Reproductor de video</p>
-          <p className="text-text-muted text-sm mt-2">
-            En producción, aquí se reproduciría el video desde {video.videoUrl}
-          </p>
-        </div>
+      {/* Reproductor: medio local si existe; si no, placeholder honesto */}
+      <div className="aspect-video bg-black rounded-xl mb-6 overflow-hidden relative flex items-center justify-center">
+        {hasMedia ? (
+          <video
+            key={video.id}
+            src={video.videoUrl}
+            poster={video.thumbnailUrl || undefined}
+            controls
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-contain"
+          />
+        ) : (
+          <div className="text-center px-4">
+            <Play className="w-16 h-16 text-primary-light mx-auto mb-4" />
+            <p className="text-text-secondary font-medium">Previsualización del video</p>
+            <p className="text-text-muted text-sm mt-2 max-w-md mx-auto">
+              Todavía no hay un archivo multimedia local asociado a este VOD. La reproducción
+              quedará disponible cuando se conecte el almacenamiento/CDN del proyecto.
+            </p>
+          </div>
+        )}
+        {isDemoVod && (
+          <span className="absolute top-3 left-3"><DemoBadge /></span>
+        )}
       </div>
 
       {/* Video Info */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white mb-3">{video.title}</h1>
+        <div className="flex items-start gap-3 mb-3">
+          <h1 className="text-2xl font-bold text-white">{video.title}</h1>
+          <ContentStateChip state={deriveContentState(video)} className="mt-1.5" />
+        </div>
         
         <div className="flex flex-wrap items-center gap-4 text-sm text-text-muted mb-4">
           <span className="flex items-center gap-1">
@@ -148,7 +207,7 @@ export function VideoPage() {
           </span>
           <span className="flex items-center gap-1">
             <Clock className="w-4 h-4" />
-            {Math.floor(video.duration / 60)}:{(video.duration % 60).toString().padStart(2, '0')}
+            {formatContentDuration(video.duration)}
           </span>
         </div>
 
@@ -167,9 +226,12 @@ export function VideoPage() {
           </button>
           {isOwner && (
             <>
-              <button className="flex items-center gap-2 px-4 py-2 bg-bg-elevated border border-border rounded-lg text-sm text-text-secondary hover:text-white transition-colors">
+              <button
+                onClick={() => setEditing(e => !e)}
+                className="flex items-center gap-2 px-4 py-2 bg-bg-elevated border border-border rounded-lg text-sm text-text-secondary hover:text-white transition-colors"
+              >
                 <Edit className="w-4 h-4" />
-                Editar
+                {editing ? 'Cancelar edición' : 'Editar'}
               </button>
               <button
                 onClick={handleDelete}
@@ -181,6 +243,32 @@ export function VideoPage() {
             </>
           )}
         </div>
+
+        {/* Formulario de edición local (título/descripción) */}
+        {isOwner && editing && (
+          <div className="bg-bg-card border border-border rounded-xl p-4 mb-6">
+            <p className="text-xs text-text-muted mb-3">
+              Los cambios se guardan localmente en este navegador. Solo se editan campos compatibles con el almacenamiento actual.
+            </p>
+            <label className="block text-sm text-text-secondary mb-1">Título</label>
+            <input
+              value={editTitle}
+              onChange={e => setEditTitle(e.target.value)}
+              maxLength={120}
+              className="w-full mb-3 px-3 py-2 rounded-lg bg-bg-elevated border border-border text-white focus:outline-none focus:border-primary"
+            />
+            <label className="block text-sm text-text-secondary mb-1">Descripción</label>
+            <textarea
+              value={editDesc}
+              onChange={e => setEditDesc(e.target.value)}
+              rows={4}
+              className="w-full mb-3 px-3 py-2 rounded-lg bg-bg-elevated border border-border text-white focus:outline-none focus:border-primary resize-none"
+            />
+            <button onClick={saveEdit} className="px-4 py-2 rounded-lg text-sm font-medium bg-primary hover:bg-primary-hover text-white">
+              Guardar cambios
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Channel Info */}

@@ -8,6 +8,7 @@ import type { Reel, Channel, User } from '../types';
 // Etapa 5: identificación de contenido demo
 import { isDemoMode } from '../config/demoMode';
 import { DEMO_USERNAME_PREFIX } from '../services/demoData';
+import { DemoBadge } from '../components/DemoBadge';
 import {
   Play, Pause, Volume2, VolumeX, Heart, Share2, Eye,
   ChevronUp, ChevronDown, Loader2, Film
@@ -53,6 +54,8 @@ function ReelCard({
   const [hasStarted, setHasStarted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [showInfo, setShowInfo] = useState(false);
+
+  const hasMedia = !!reel.videoUrl;
 
   const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
     videoRef.current = el;
@@ -105,24 +108,38 @@ function ReelCard({
       data-reel-id={reel.id}
       aria-label={`Reel: ${reel.title}`}
     >
-      {/* Video 9:16 */}
-      <video
-        ref={setVideoRef}
-        src={reel.videoUrl}
-        poster={reel.thumbnailUrl || undefined}
-        className="h-full w-auto max-w-full object-contain aspect-[9/16]"
-        style={{ aspectRatio: '9 / 16' }}
-        muted={isMuted}
-        loop
-        playsInline
-        preload="metadata"
-        onClick={togglePlay}
-        onLoadedData={() => { setIsLoading(false); setHasStarted(true); }}
-        onTimeUpdate={(e) => {
-          const v = e.currentTarget;
-          if (v.duration > 0) setProgress((v.currentTime / v.duration) * 100);
-        }}
-      />
+      {/* Video 9:16: medio local si existe; si no, placeholder honesto (sin URLs externas) */}
+      {hasMedia ? (
+        <video
+          ref={setVideoRef}
+          src={reel.videoUrl}
+          poster={reel.thumbnailUrl || undefined}
+          className="h-full w-auto max-w-full object-contain aspect-[9/16]"
+          style={{ aspectRatio: '9 / 16' }}
+          muted={isMuted}
+          loop
+          playsInline
+          preload="metadata"
+          onClick={togglePlay}
+          onLoadedData={() => { setIsLoading(false); setHasStarted(true); }}
+          onTimeUpdate={(e) => {
+            const v = e.currentTarget;
+            if (v.duration > 0) setProgress((v.currentTime / v.duration) * 100);
+          }}
+        />
+      ) : (
+        <div
+          className="h-full w-full flex flex-col items-center justify-center gap-3 text-center px-6"
+          style={{ background: 'radial-gradient(circle at 30% 20%, rgba(124,58,237,0.35), transparent 55%), radial-gradient(circle at 75% 80%, rgba(34,211,238,0.22), transparent 55%), #0b0b12' }}
+          onClick={togglePlay}
+        >
+          <Film className="w-14 h-14 text-white/70" />
+          <p className="text-white font-semibold text-sm sm:text-base max-w-xs">{reel.title}</p>
+          <span className="px-2 py-1 rounded bg-white/10 border border-white/20 text-[11px] uppercase tracking-wide text-white/80">
+            Contenido de demostración — sin archivo multimedia local todavía
+          </span>
+        </div>
+      )}
 
       {/* Overlay superior: degradado + info del creador */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/70 to-transparent" />
@@ -152,8 +169,8 @@ function ReelCard({
         </div>
       </div>
 
-      {/* Loading spinner */}
-      {isLoading && (
+      {/* Loading spinner (solo cuando hay medio real que cargar) */}
+      {hasMedia && isLoading && (
         <div className="absolute inset-0 flex items-center justify-center z-10">
           <Loader2 className="w-10 h-10 text-primary animate-spin" />
         </div>
@@ -223,7 +240,12 @@ function ReelCard({
 
       {/* Pie: título y descripción */}
       <div className="absolute bottom-4 left-4 right-20 z-10">
-        <h2 className="text-sm sm:text-base font-semibold text-white line-clamp-1 drop-shadow">{reel.title}</h2>
+        <h2 className="text-sm sm:text-base font-semibold text-white line-clamp-1 drop-shadow">
+          {reel.title}
+          {isDemoMode() && creator?.username.startsWith(DEMO_USERNAME_PREFIX) && (
+            <span className="ml-2 inline-flex align-middle"><DemoBadge /></span>
+          )}
+        </h2>
         <p
           className={`text-xs sm:text-sm text-white/80 mt-1 cursor-pointer ${showInfo ? '' : 'line-clamp-1'}`}
           onClick={() => setShowInfo(s => !s)}

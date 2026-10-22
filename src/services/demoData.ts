@@ -38,7 +38,7 @@ const KEYS = {
 };
 
 export const DEMO_SEED_VERSION_KEY = 'nexura_demo_seed_version';
-export const DEMO_SEED_VERSION = '1';
+export const DEMO_SEED_VERSION = '2'; // v2: reels demo canónicos con IDs estables (Etapa 6)
 
 /** Prefijo que identifica a TODAS las entidades demo (no se usa en producción). */
 export const DEMO_USERNAME_PREFIX = 'demo_';
@@ -406,20 +406,23 @@ function doSeed(force = false): void {
   }
   set(KEYS.activity, activities);
 
-  // ---- Clips demo (metadatos; video placeholder interno) ----
+  // ---- Clips demo (metadatos; sin medio real: placeholder honesto en ClipPage) ----
+  // Etapa 6: la guarda es por TÍTULO canónico, no por storageKey: el reset
+  // elimina duramente los clips demo, y con la guarda anterior nunca volvían.
   const clips = get<Clip>(KEYS.clips);
-  if (clips.filter(c => c.storageKey?.startsWith('clips/demo/')).length === 0) {
-    const clipDefs = [
-      { ch: 0, title: 'Clip demo: final épico del speedrun', dur: 38 },
-      { ch: 1, title: 'Clip demo: bug encontrado en vivo', dur: 25 },
-      { ch: 2, title: 'Clip demo: drop lo-fi favorito del chat', dur: 45 },
-      { ch: 0, title: 'Clip demo: reacción del momento', dur: 18 },
-      { ch: 3, title: 'Clip demo: timelapse de ilustración', dur: 52 },
-    ];
-    for (const cd of clipDefs) {
-      const entry = created[cd.ch];
-      if (!entry) continue;
-      clips.push({
+  const clipDefs = [
+    { ch: 0, title: 'Clip demo: final épico del speedrun', dur: 38 },
+    { ch: 1, title: 'Clip demo: bug encontrado en vivo', dur: 25 },
+    { ch: 2, title: 'Clip demo: drop lo-fi favorito del chat', dur: 45 },
+    { ch: 0, title: 'Clip demo: reacción del momento', dur: 18 },
+    { ch: 3, title: 'Clip demo: timelapse de ilustración', dur: 52 },
+  ];
+  for (const cd of clipDefs) {
+    if (clips.some(c => c.title === cd.title)) continue;
+
+    const entry = created[cd.ch];
+    if (!entry) continue;
+    clips.push({
         id: uuidv4(),
         channelId: entry.channel.id,
         videoId: null,
@@ -438,22 +441,23 @@ function doSeed(force = false): void {
         createdAt: ago(120 + Math.floor(Math.random() * 5000)),
         updatedAt: now,
       });
-    }
-    set(KEYS.clips, clips);
   }
+  set(KEYS.clips, clips);
 
   // ---- VOD demo (metadatos; el comprador conecta su storage/CDN) ----
+  // Etapa 6: guarda por título canónico para que "Restaurar datos demo"
+  // vuelva a sembrar los VOD eliminados (el reset los borra duramente).
   const videos = get<Video>(KEYS.videos);
-  if (videos.filter(v => v.storageKey?.startsWith('videos/demo/')).length === 0) {
-    const vodDefs = [
-      { ch: 0, title: 'VOD demo: Speedrun completo (ejemplo)' },
-      { ch: 1, title: 'VOD demo: Arquitectura de NEXURA (charla)' },
-      { ch: 3, title: 'VOD demo: Proceso de ilustración completo' },
-    ];
-    for (const vd of vodDefs) {
-      const entry = created[vd.ch];
-      if (!entry) continue;
-      videos.push({
+  const vodDefs = [
+    { ch: 0, title: 'VOD demo: Speedrun completo (ejemplo)' },
+    { ch: 1, title: 'VOD demo: Arquitectura de NEXURA (charla)' },
+    { ch: 3, title: 'VOD demo: Proceso de ilustración completo' },
+  ];
+  for (const vd of vodDefs) {
+    if (videos.some(v => v.title === vd.title)) continue;
+    const entry = created[vd.ch];
+    if (!entry) continue;
+    videos.push({
         id: uuidv4(),
         channelId: entry.channel.id,
         streamId: null,
@@ -472,26 +476,55 @@ function doSeed(force = false): void {
         createdAt: ago(60 * 24 * 4),
         updatedAt: now,
       });
-    }
-    set(KEYS.videos, videos);
   }
+  set(KEYS.videos, videos);
 
-  // ---- Reels demo ----
-  // El feed de reels usa videos de muestra públicos ya presentes en el repo
-  // (seed heredado de reel.ts). Acá se re-anclan a canales DEMO para que la
-  // actividad demo sea coherente y el reset pueda eliminarlos sin tocar reels
-  // creados localmente por el propietario del navegador.
+  // ---- Reels demo (Etapa 6: fuente canónica acá, IDs estables demo_reel_<i>) ----
+  // Sin asset multimedia: videoUrl '' => el feed muestra placeholder honesto.
+  // El comprador conecta storage/CDN cuando exista medio real.
   const reels = get<Reel>(KEYS.reels);
-  if (reels.length > 0) {
+  if (!reels.some(r => r.id.startsWith('demo_reel_'))) {
+    const reelDefs: Array<{ ch: number; title: string; description: string; duration: number }> = [
+      { ch: 4, title: 'Amanecer en la montaña', description: 'Los primeros rayos de sol sobre las cumbres ✨ #naturaleza #viajes', duration: 8 },
+      { ch: 0, title: 'Setup gaming minimalista', description: 'Tour rápido por el setup 2026 🎮 #gaming #setup', duration: 8 },
+      { ch: 2, title: 'Receta express en 30 segundos', description: 'Cena rápida y deliciosa 🍜 #cocina #recetas', duration: 8 },
+      { ch: 3, title: 'Truco de edición que cambia todo', description: 'Cómo lograr este efecto en un par de clics 🎬 #tutorial #creadores', duration: 8 },
+    ];
+    for (let i = 0; i < reelDefs.length; i++) {
+      const rd = reelDefs[i];
+      const entry = created[rd.ch] ?? created[i % created.length];
+      if (!entry) continue;
+      const createdAt = ago(30 + i * 96);
+      reels.push({
+        id: `demo_reel_${i}`,
+        channelId: entry.channel.id,
+        title: rd.title,
+        description: `${rd.description} (Contenido de demostración local.)`,
+        status: 'READY',
+        videoUrl: '',
+        thumbnailUrl: '',
+        storageKey: `reels/demo/${i}`,
+        duration: rd.duration,
+        views: 1000 + Math.floor(Math.random() * 50000),
+        likes: 100 + Math.floor(Math.random() * 5000),
+        likedBy: [],
+        createdAt,
+        updatedAt: now,
+      });
+    }
+    set(KEYS.reels, reels);
+  } else {
+    // Re-siembra tras reset: re-ancla reels demo huérfanos a canales demo válidos.
     let changed = false;
     for (const r of reels) {
       if (!r.storageKey?.startsWith('reels/demo/')) continue;
-      const anchor = created[r.title.length % created.length];
-      if (anchor && r.channelId !== anchor.channel.id) {
-        r.channelId = anchor.channel.id;
-        changed = true;
+      const stillValid = created.some(c => c.channel.id === r.channelId);
+      if (!stillValid) {
+        const anchor = created[r.id.charCodeAt(r.id.length - 1) % created.length];
+        if (anchor) { r.channelId = anchor.channel.id; changed = true; }
       }
     }
     if (changed) set(KEYS.reels, reels);
   }
+
 }

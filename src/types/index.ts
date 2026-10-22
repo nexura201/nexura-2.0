@@ -212,12 +212,17 @@ export interface ChatSettings {
 // ============ VOD & CLIPS ============
 export type VideoStatus = 'PROCESSING' | 'READY' | 'FAILED' | 'PRIVATE' | 'DELETED';
 export type VideoVisibility = 'PUBLIC' | 'UNLISTED' | 'PRIVATE';
+// Etapa 6: PRIVATE es un estado de VISIBILIDAD, no de lifecycle técnico.
+// Clips no tiene campo visibility; la visibilidad se modela con este campo
+// separado (status sigue siendo PROCESSING/READY/FAILED/DELETED).
+export type ClipVisibility = 'PUBLIC' | 'PRIVATE';
 export type ClipStatus = 'PROCESSING' | 'READY' | 'FAILED' | 'DELETED';
 
 export interface Video {
   id: string;
   channelId: string;
-  streamId: string;
+  /** VOD puede no provenir de un stream directo (subida local/demo) → null. */
+  streamId: string | null;
   title: string;
   description: string;
   status: VideoStatus;
@@ -246,6 +251,8 @@ export interface Clip {
   endTime: number;
   duration: number;
   status: ClipStatus;
+  /** Etapa 6 — visibilidad del clip (opcional por retrocompatibilidad: undefined === PUBLIC). */
+  visibility?: ClipVisibility;
   thumbnailUrl: string;
   videoUrl: string;
   storageKey: string;
