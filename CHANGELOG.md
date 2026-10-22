@@ -7,6 +7,38 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Added — ETAPA 7D: Editor básico de video (Creator Studio)
+- Nueva página `src/pages/VideoEditorPage.tsx` en `/dashboard/editor` y
+  `/dashboard/editor/:id` (rutas protegidas, mismo Layout; no se rediseñó nada).
+- **Selección de contenido** vía la capa unificada existente
+  (`contentService.getCreatorContent`) filtrando solo contenido propio con
+  archivo local (storageKey); los contenidos DEMO sin blob quedan excluidos y
+  se explican. Empty state honesto: "Primero cargá un video desde Creator
+  Studio" con acceso a `/dashboard/upload`.
+- **Reproductor HTML5** sobre Blob URL local (`useLocalMediaUrl` + IndexedDB /
+  `mediaLocal.ts`): play/pause, duración, tiempo actual, barra de progreso,
+  volumen, mute y pantalla completa. Estados loading/error/archivo eliminado/
+  codec no soportado/sin archivo — nunca spinner infinito (verificación extra
+  con `hasMedia`).
+- **Recorte básico** (Inicio/Fin mm:ss editable) con reglas inicio ≥ 0,
+  fin ≤ duración, inicio < fin y timeline visual con el rango seleccionado.
+- **Vista previa del recorte**: arranca en el inicio y se detiene
+  automáticamente en el fin; repetible.
+- **Formato del Reel** (9:16 Vertical) con previsualización CSS — sin
+  conversión destructiva (declarado explícitamente).
+- **Texto sobre el video** opcional con posición arriba/centro/abajo; se guarda
+  como configuración (no se incrusta en el archivo).
+- Nuevo servicio `src/services/videoEdit.ts`: la edición se persiste como
+  CONFIGURACIÓN local (mediaId=storageKey, contentId, startTime, endTime,
+  formato, texto+posición, fechas) con upsert por contenido. Los blobs siguen
+  viviendo únicamente en IndexedDB (`mediaLocal.ts`); no hay segunda
+  arquitectura ni duplicación de binarios en localStorage.
+- **Exportación honesta**: no se simula — "Edición guardada localmente. La
+  exportación de video se incorporará en una etapa posterior."
+- Creator Studio: acceso visible **"Editor de video"** → `/dashboard/editor`
+  (en Crear contenido y en Accesos del Creator Studio). No se rompió ningún
+  acceso previo. Funciona con DEMO_MODE ON/OFF sin generar videos demo.
+
 ### Added — ETAPA 7C: Creator Studio
 - `/dashboard` convertido en **Creator Studio**: saludo del creador, estado general
   del canal (seguidores / visualizaciones / horas transmitidas / contenidos reales),

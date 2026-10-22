@@ -65,6 +65,8 @@ import { SettingsPage } from './pages/Settings';
 import { AdminPage } from './pages/AdminOwner';
 import { ExplorePage, FollowingPage, CategoriesPage, LibraryPage } from './pages/NavigationPages';
 import { UploadPage } from './pages/UploadPage';
+// ETAPA 7D — Editor básico de video (Creator Studio)
+import { VideoEditorPage } from './pages/VideoEditorPage';
 import { runSafeMediaCleanup } from './services/content';
 import { SearchPage } from './pages/SearchPage';
 import { CategoryPage } from './pages/CategoryPage';
@@ -207,6 +209,9 @@ function AppRoutes() {
       <Route path="/dashboard/stream" element={<ProtectedRoute><Layout><StreamConfigPage /></Layout></ProtectedRoute>} />
       {/* ETAPA 7B — Subida local de contenido (Reel/VOD/Clip) a IndexedDB */}
       <Route path="/dashboard/upload" element={<ProtectedRoute><Layout><UploadPage /></Layout></ProtectedRoute>} />
+      {/* ETAPA 7D — Editor básico de video sobre contenido local (IndexedDB) */}
+      <Route path="/dashboard/editor" element={<ProtectedRoute><Layout><VideoEditorPage /></Layout></ProtectedRoute>} />
+      <Route path="/dashboard/editor/:id" element={<ProtectedRoute><Layout><VideoEditorPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard/analytics" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
       {/* Alias de contenido existente: Mis Videos / Mis Clips (los enlaces internos ya apuntan aquí) */}
       <Route path="/dashboard/videos" element={<ProtectedRoute><Layout><LibraryPage /></Layout></ProtectedRoute>} />
