@@ -473,14 +473,14 @@ function DemoSettings({ addToast }: { addToast: ReturnType<typeof useToast>['add
     setDemoMode(next);
     setDemoOn(next);
     if (next) seedDemoData();
-    addToast(next ? 'Modo demo activado.' : 'Modo demo desactivado.', next ? 'success' : 'info');
+    addToast(next ? 'success' : 'info', next ? 'Modo demo activado.' : 'Modo demo desactivado.');
     setTimeout(() => window.location.reload(), 300);
   };
 
   const handleReset = () => {
     const { removed } = resetDemoData();
     setConfirmReset(false);
-    addToast(`Datos demo restaurados (${removed} entidades demo eliminadas y re-sembradas).`, 'success');
+    addToast('success', `Datos demo restaurados (${removed} entidades demo eliminadas y re-sembradas).`);
     setTimeout(() => window.location.reload(), 400);
   };
 

@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { Clip, ClipStatus } from '../types';
+import type { Clip } from '../types';
 import { storageService } from './storage';
 import * as db from './database';
 import * as streaming from './streaming';
@@ -212,7 +212,7 @@ export function getClipById(clipId: string): Clip | null {
 export function getChannelClips(channelId: string): Clip[] {
   const clips = getCollection<Clip>(CLIP_KEYS.clips);
   return clips
-    .filter(c => c.channelId === channelId && c.status === 'READY')
+    .filter(c => c.channelId === channelId && c.status === 'READY' && c.visibility !== 'PRIVATE')
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
@@ -222,8 +222,53 @@ export function getChannelClips(channelId: string): Clip[] {
 export function getVideoClips(videoId: string): Clip[] {
   const clips = getCollection<Clip>(CLIP_KEYS.clips);
   return clips
-    .filter(c => c.videoId === videoId && c.status === 'READY')
+    .filter(c => c.videoId === videoId && c.status === 'READY' && c.visibility !== 'PRIVATE')
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+/**
+ * Etapa 6 — Biblioteca del creador: TODOS los clips propios (incluye
+ * PROCESSING y otros estados no eliminados). La vista pública sigue usando
+ * getAllClips/getChannelClips.
+ *
+ * [FUTURO BACKEND] Reemplazar por GET /api/clips?creatorId=...&scope=owner
+ */
+export function getClipsForLibraryForOwner(userId: string): Clip[] {
+  const clips = getCollection<Clip>(CLIP_KEYS.clips);
+  return clips
+    .filter(c => c.creatorId === userId && c.status !== 'DELETED')
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+}
+
+/**
+ * Etapa 6 — Actualizar metadatos locales de un clip (título/descripción).
+ */
+export function updateClipMetadata(clipId: string, updates: { title?: string; description?: string }): Clip {
+  const clips = getCollection<Clip>(CLIP_KEYS.clips);
+  const idx = clips.findIndex(c => c.id === clipId);
+  if (idx === -1) throw new Error('CLIP_NOT_FOUND');
+  Object.assign(clips[idx], updates, { updatedAt: new Date().toISOString() });
+  setCollection(CLIP_KEYS.clips, clips);
+  return clips[idx];
+}
+
+/**
+ * Etapa 6 — Publicar/ocultar un clip desde la Biblioteca.
+ * VISIBILITY (no lifecycle): el estado técnico de `status` NO cambia;
+ * se usa el campo `visibility` ('PUBLIC' | 'PRIVATE', opcional por
+ * retrocompatibilidad: undefined se interpreta como PUBLIC).
+ * Los filtros públicos (getAllClips/getChannelClips/...) excluyen PRIVATE.
+ * [FUTURO BACKEND] PATCH /api/clips/:id { visibility }
+ */
+export function setClipVisibility(clipId: string, visibility: 'PUBLIC' | 'PRIVATE'): Clip {
+  const clips = getCollection<Clip>(CLIP_KEYS.clips);
+  const idx = clips.findIndex(c => c.id === clipId);
+  if (idx === -1) throw new Error('CLIP_NOT_FOUND');
+  if (clips[idx].status === 'DELETED') throw new Error('CLIP_DELETED');
+  clips[idx].visibility = visibility;
+  clips[idx].updatedAt = new Date().toISOString();
+  setCollection(CLIP_KEYS.clips, clips);
+  return clips[idx];
 }
 
 /**
@@ -232,7 +277,7 @@ export function getVideoClips(videoId: string): Clip[] {
 export function getStreamClips(streamId: string): Clip[] {
   const clips = getCollection<Clip>(CLIP_KEYS.clips);
   return clips
-    .filter(c => c.streamId === streamId && c.status === 'READY')
+    .filter(c => c.streamId === streamId && c.status === 'READY' && c.visibility !== 'PRIVATE')
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
@@ -282,7 +327,8 @@ export function incrementClipViews(clipId: string): void {
  */
 export function getAllClips(): Clip[] {
   const clips = getCollection<Clip>(CLIP_KEYS.clips);
-  return clips.filter(c => c.status === 'READY');
+  // Vista pública: solo READY y no ocultos (visibility PRIVATE queda fuera).
+  return clips.filter(c => c.status === 'READY' && c.visibility !== 'PRIVATE');
 }
 
 // ============ UTILITY FUNCTIONS ============

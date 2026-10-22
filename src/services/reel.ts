@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Reel } from '../types';
 import * as db from './database';
+import { isDemoMode } from '../config/demoMode';
+import { seedDemoData } from './demoData';
 
 /**
  * ReelService - Maneja Reels (videos verticales cortos 9:16)
@@ -18,61 +20,32 @@ const REEL_KEYS = {
 // ============ DEMO DATA ============
 
 /**
- * Seeds de Reels demo (vids públicos de muestra en formato vertical).
- * Se insertan una sola vez si la colección está vacía.
+ * Etapa 6 — Contenido multimedia de los Reels DEMO.
+ *
+ * Decisión final: NO se generan videos en runtime (Canvas+MediaRecorder era
+ * frágil: dependía de codecs soportados por el navegador, creaba blob: URLs
+ * que expiran al recargar y trabajo pesado innecesario). Tampoco se usan
+ * URLs externas (se eliminaron las heredadas de Google gtv-videos-bucket).
+ *
+ * Los reels demo quedan con `videoUrl: ''` y el feed muestra un PLACEHOLDER
+ * HONESTO a pantalla completa (gradiente NEXURA + etiqueta "Contenido de
+ * demostración"). La reproducción real de cualquier contenido (demo o no)
+ * queda disponible para cuando el comprador conecte storage/CDN propios:
+ * basta con que `videoUrl` apunte a un asset local (/public) o a la URL del
+ * CDN futuro; ReelCard ya renderiza <video> cuando videoUrl no está vacío.
  */
+/**
+ * Etapa 6 — Los Reels DEMO se siembran desde demoData.ts (única fuente de
+ * verdad del universo demo, creada en Etapa 5): IDs estables `demo_reel_<i>`,
+ * anclados a canales demo_* y restaurables con "Restaurar datos demo".
+ * Esta capa ya NO duplica definiciones ni URLs externas (se eliminaron las
+ * heredadas de Google gtv-videos-bucket; ver sección Content/Media del README).
+ */
+
+/** Red de seguridad: asegura el seed demo (idempotente) antes de leer. */
 function seedDemoReels(): void {
-  if (getCollection<Reel>(REEL_KEYS.reels).length > 0) return;
-
-  const channels = db.getAllChannels();
-  if (channels.length === 0) return;
-
-  const demos: Array<Pick<Reel, 'title' | 'description' | 'videoUrl'> & { duration: number }> = [
-    {
-      title: 'Amanecer en la montaña',
-      description: 'Los primeros rayos de sol sobre las cumbres ✨ #naturaleza #viajes',
-      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      duration: 15,
-    },
-    {
-      title: 'Setup gaming minimalista',
-      description: 'Tour rápido por el setup 2026 🎮 #gaming #setup',
-      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-      duration: 15,
-    },
-    {
-      title: 'Receta express en 30 segundos',
-      description: 'Cena rápida y deliciosa 🍜 #cocina #recetas',
-      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-      duration: 60,
-    },
-    {
-      title: 'Truco de edición que cambia todo',
-      description: 'Cómo lograr este efecto en un par de clics 🎬 #tutorial #creadores',
-      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-      duration: 15,
-    },
-  ];
-
-  const now = new Date().toISOString();
-  const reels: Reel[] = demos.map((d, i) => ({
-    id: uuidv4(),
-    channelId: channels[i % channels.length].id,
-    title: d.title,
-    description: d.description,
-    status: 'READY',
-    videoUrl: d.videoUrl,
-    thumbnailUrl: '',
-    storageKey: `reels/demo/${i}`,
-    duration: d.duration,
-    views: Math.floor(Math.random() * 50000) + 1000,
-    likes: Math.floor(Math.random() * 5000) + 100,
-    likedBy: [],
-    createdAt: now,
-    updatedAt: now,
-  }));
-
-  setCollection(REEL_KEYS.reels, reels);
+  if (!isDemoMode()) return;
+  seedDemoData();
 }
 
 // ============ REEL OPERATIONS ============
@@ -136,13 +109,28 @@ export function getReelsFeed(): Reel[] {
 }
 
 /**
- * Obtener reels de un canal
+ * Obtener reels de un canal (vista pública: solo READY)
  */
 export function getChannelReels(channelId: string): Reel[] {
   const reels = getCollection<Reel>(REEL_KEYS.reels);
   return reels
     .filter(r => r.channelId === channelId && r.status === 'READY')
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+/**
+ * Etapa 6 — Biblioteca del creador: todos los reels propios de un canal
+ * (incluye PROCESSING/PRIVATE/borradores), excluyendo los eliminados.
+ * NO cambia el comportamiento del feed público (getReelsFeed/getChannelReels).
+ * Misma fuente de datos (localStorage `nexura_reels`), sin segunda colección.
+ *
+ * [FUTURO BACKEND] Reemplazar por GET /api/reels?channelId=...&scope=owner
+ */
+export function getChannelReelsIncludingHidden(channelId: string): Reel[] {
+  const reels = getCollection<Reel>(REEL_KEYS.reels);
+  return reels
+    .filter(r => r.channelId === channelId && r.status !== 'DELETED')
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 /**
@@ -177,6 +165,28 @@ export function deleteReel(reelId: string): boolean {
 
   db.createAuditLog('system', 'REEL_DELETED', 'reel', reelId, '');
   return true;
+}
+
+/**
+ * Etapa 6 — Actualizar metadatos locales de un reel (título/descripción).
+ * Persistencia local; [FUTURO BACKEND] PATCH /api/reels/:id.
+ */
+export function updateReelMetadata(reelId: string, updates: { title?: string; description?: string }): Reel {
+  return updateReel(reelId, updates);
+}
+
+/**
+ * Etapa 6 — Publicar/ocultar un reel desde la Biblioteca.
+ * ReelStatus ya admite PRIVATE (mismo patrón que VideoStatus):
+ * PUBLICAR ⇄ READY, OCULTAR ⇄ PRIVATE. No toca el feed público
+ * (getReelsFeed solo lista READY).
+ * [FUTURO BACKEND] PATCH /api/reels/:id { visibility }
+ */
+export function setReelPublished(reelId: string, makePublic: boolean): Reel {
+  const current = getReelById(reelId);
+  if (!current) throw new Error('REEL_NOT_FOUND');
+  if (current.status === 'DELETED') throw new Error('REEL_DELETED');
+  return updateReel(reelId, { status: makePublic ? 'READY' : 'PRIVATE' });
 }
 
 /**

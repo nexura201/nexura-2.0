@@ -4,9 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import * as clipService from '../services/clip';
 import * as db from '../services/database';
+import { DEMO_USERNAME_PREFIX } from '../services/demoData';
+import { formatContentDuration, deriveContentState } from '../services/content';
+import { ContentStateChip } from '../components/ContentStateChip';
+import { DemoBadge } from '../components/DemoBadge';
 import type { Clip, User, Channel } from '../types';
 import {
-  Play, Calendar, Eye, Share2, Flag, UserPlus, UserCheck,
+  Calendar, Eye, Share2, Flag, UserPlus, UserCheck,
   Trash2, Clock, Scissors
 } from 'lucide-react';
 
@@ -25,7 +29,9 @@ export function ClipPage() {
   useEffect(() => {
     if (id) {
       const c = clipService.getClipById(id);
-      if (c && c.status === 'READY') {
+      // Un clip oculto (visibility PRIVATE) solo es visible para su dueño.
+      const isOwnerOfLoaded = c && user && (c.creatorId === user.id || user.role === 'OWNER' || user.role === 'ADMIN');
+      if (c && c.status === 'READY' && (c.visibility !== 'PRIVATE' || isOwnerOfLoaded)) {
         setClip(c);
         
         // Get channel info
@@ -115,23 +121,44 @@ export function ClipPage() {
   }
 
   const isOwner = user && (clip.creatorId === user.id || user.role === 'OWNER' || user.role === 'ADMIN');
+  const hasMedia = !!clip.videoUrl;
+  const isDemoClip = channelUser?.username.startsWith(DEMO_USERNAME_PREFIX) ?? false;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Clip Player */}
-      <div className="aspect-video bg-bg-elevated rounded-xl mb-6 flex items-center justify-center">
-        <div className="text-center">
-          <Scissors className="w-16 h-16 text-warning mx-auto mb-4" />
-          <p className="text-text-secondary">Reproductor de clip</p>
-          <p className="text-text-muted text-sm mt-2">
-            En producción, aquí se reproduciría el clip desde {clip.videoUrl}
-          </p>
-        </div>
+      {/* Reproductor: usa el medio local si existe; si no, placeholder honesto */}
+      <div className="aspect-video bg-black rounded-xl mb-6 overflow-hidden relative flex items-center justify-center">
+        {hasMedia ? (
+          <video
+            key={clip.id}
+            src={clip.videoUrl}
+            poster={clip.thumbnailUrl || undefined}
+            controls
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-contain"
+          />
+        ) : (
+          <div className="text-center px-4">
+            <Scissors className="w-16 h-16 text-warning mx-auto mb-4" />
+            <p className="text-text-secondary font-medium">Previsualización del clip</p>
+            <p className="text-text-muted text-sm mt-2 max-w-md mx-auto">
+              Todavía no hay un archivo multimedia local asociado a este clip. La reproducción
+              quedará disponible cuando se conecte el almacenamiento/CDN del proyecto.
+            </p>
+          </div>
+        )}
+        {isDemoClip && (
+          <span className="absolute top-3 left-3"><DemoBadge /></span>
+        )}
       </div>
 
       {/* Clip Info */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white mb-3">{clip.title}</h1>
+        <div className="flex items-start gap-3 mb-3">
+          <h1 className="text-2xl font-bold text-white">{clip.title}</h1>
+          <ContentStateChip state={deriveContentState(clip)} className="mt-1.5" />
+        </div>
         
         <div className="flex flex-wrap items-center gap-4 text-sm text-text-muted mb-4">
           <span className="flex items-center gap-1">
@@ -148,7 +175,7 @@ export function ClipPage() {
           </span>
           <span className="flex items-center gap-1">
             <Clock className="w-4 h-4" />
-            {clip.duration}s
+            {formatContentDuration(clip.duration)}
           </span>
         </div>
 
