@@ -280,19 +280,16 @@ export function DashboardPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-3">
           Accesos del Creator Studio
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
           <AccessLink to="/dashboard/upload" icon={UploadCloud} label="Crear contenido" />
           <AccessLink to="/dashboard/editor" icon={Clapperboard} label="Editor de video" />
           <AccessLink to="/library" icon={Library} label="Biblioteca" />
           <AccessLink to="/dashboard/stream" icon={Radio} label="Configuración de stream" />
           <AccessLink to="/dashboard/analytics" icon={BarChart3} label="Analytics" />
           <AccessLink to="/notifications" icon={Bell} label="Notificaciones" badgeCount={unreadNotifications} />
+          <AccessLink to="/dashboard/schedule" icon={CalendarDays} label="Calendario" />
           <AccessLink to="/settings" icon={Settings2} label="Configuración" />
         </div>
-        <p className="text-xs text-text-muted mt-2">
-          Calendario / programación estará disponible cuando se implemente esa sección
-          (no hay ruta propia todavía — no se muestra un acceso falso).
-        </p>
       </section>
 
       {/* ===== Resumen básico de actividad ===== */}
