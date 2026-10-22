@@ -25,31 +25,39 @@ export function ClipPage() {
   const [channelUser, setChannelUser] = useState<User | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Bug QA Etapa 6: si la URL multimedia almacenada es inválida/heredada,
+  // el <video> dispara onError => se muestra el placeholder honesto en vez
+  // de quedar esperando un evento onLoadedData que nunca ocurre.
+  const [mediaError, setMediaError] = useState(false);
 
   useEffect(() => {
-    if (id) {
+    if (!id) return;
+    try {
       const c = clipService.getClipById(id);
       // Un clip oculto (visibility PRIVATE) solo es visible para su dueño.
       const isOwnerOfLoaded = c && user && (c.creatorId === user.id || user.role === 'OWNER' || user.role === 'ADMIN');
       if (c && c.status === 'READY' && (c.visibility !== 'PRIVATE' || isOwnerOfLoaded)) {
         setClip(c);
-        
+        setMediaError(false);
+
         // Get channel info
         const ch = db.getAllChannels().find(ch => ch.id === c.channelId);
         if (ch) {
           setChannel(ch);
           const chUser = db.getUserById(ch.userId);
           setChannelUser(chUser);
-          
+
           // Check if following
           if (user) {
             setIsFollowing(db.isFollowing(user.id, ch.userId));
           }
         }
-        
+
         // Increment views
         clipService.incrementClipViews(id);
       }
+    } finally {
+      // Nunca dejar loading infinito, ni siquiera ante excepciones.
       setLoading(false);
     }
   }, [id, user]);
@@ -121,7 +129,8 @@ export function ClipPage() {
   }
 
   const isOwner = user && (clip.creatorId === user.id || user.role === 'OWNER' || user.role === 'ADMIN');
-  const hasMedia = !!clip.videoUrl;
+  // Sin videoUrl no se intenta cargar nada; con mediaError la URL falló => fallback honesto.
+  const hasMedia = !!clip.videoUrl && !mediaError;
   const isDemoClip = channelUser?.username.startsWith(DEMO_USERNAME_PREFIX) ?? false;
 
   return (
@@ -136,6 +145,7 @@ export function ClipPage() {
             controls
             playsInline
             preload="metadata"
+            onError={() => setMediaError(true)}
             className="h-full w-full object-contain"
           />
         ) : (

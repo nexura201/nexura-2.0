@@ -59,3 +59,17 @@ body {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
 }
+
+/* Skeleton de carga (Etapa 6 — bug fix: la clase se usaba en muchas vistas pero
+   no estaba definida, dejando placeholders invisibles que parecían una pantalla
+   de carga congelada). Estética neutra alineada a la paleta NEXURA. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: rgb(39 39 58);
+  animation: nexura-skeleton-pulse 1.8s ease-in-out infinite;
+}
+@keyframes nexura-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}

@@ -1,0 +1,80 @@
+# Habilitar reescritura de URLs
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # Redirigir HTTP a HTTPS (descomentar si tienes SSL)
+  # RewriteCond %{HTTPS} off
+  # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  
+  # Si el archivo o directorio existe, servirlo directamente
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  
+  # Para todas las demás rutas, servir index.html (SPA)
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Configuración de caché para mejor rendimiento
+<IfModule mod_expires.c>
+  ExpiresActive On
+  
+  # CSS y JavaScript
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType text/javascript "access plus 1 year"
+  
+  # Imágenes
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/gif "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/x-icon "access plus 1 year"
+  
+  # Fuentes
+  ExpiresByType font/ttf "access plus 1 year"
+  ExpiresByType font/otf "access plus 1 year"
+  ExpiresByType font/woff "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  
+  # HTML
+  ExpiresByType text/html "access plus 1 hour"
+</IfModule>
+
+# Compresión GZIP para mejor rendimiento
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html
+  AddOutputFilterByType DEFLATE text/css
+  AddOutputFilterByType DEFLATE text/javascript
+  AddOutputFilterByType DEFLATE application/javascript
+  AddOutputFilterByType DEFLATE application/json
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# Seguridad básica
+<IfModule mod_headers.c>
+  # Prevenir clickjacking
+  Header always append X-Frame-Options SAMEORIGIN
+  
+  # Prevenir MIME type sniffing
+  Header set X-Content-Type-Options nosniff
+  
+  # Habilitar XSS protection
+  Header set X-XSS-Protection "1; mode=block"
+  
+  # Referrer Policy
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Prevenir acceso a archivos sensibles
+<FilesMatch "\.(env|log|md|json|lock)$">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+# Permitir acceso a archivos estáticos
+<FilesMatch "\.(ico|jpg|jpeg|png|gif|svg|webp|css|js|woff|woff2|ttf|otf)$">
+  Header set Cache-Control "max-age=31536000, public"
+</FilesMatch>
