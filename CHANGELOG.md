@@ -7,6 +7,32 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Added — ETAPA 7E-1: Analytics del Creator Studio
+- Nueva página `src/pages/AnalyticsPage.tsx` en la ruta EXISTENTE
+  `/dashboard/analytics` (antes apuntaba a DashboardPage; ahora tiene página
+  propia dentro del mismo Layout, sin crear rutas nuevas ni duplicar métricas).
+- **Resumen principal** reutilizando `AnalyticsService.getDashboardStats`:
+  seguidores, visualizaciones, horas transmitidas y contenido publicado
+  (conteo desde la capa unificada `contentService.getCreatorContent`).
+  Sin métricas financieras y sin cifras inventadas.
+- **Contenido** separado por tipo real: Reels / VOD / Clips, incluyendo los
+  uploads locales de 7A/7B. No se cuentan archivos inexistentes.
+- **Actividad reciente** vía `ActivityService.getChannelActivities`; estado
+  vacío honesto si no hay eventos.
+- **Gráfico recharts** SOLO con conteos reales por tipo de contenido (sin
+  serie temporal fabricada). Sin datos, muestra el aviso: "Los datos
+  históricos estarán disponibles cuando NEXURA tenga almacenamiento
+  persistente de analíticas."
+- Selector de período (hoy/7/30/90 días) aplicado únicamente a streams
+  finalizados, dato que sí existe (`getStreamAnalytics`).
+- Estados loading/error/vacío/sin canal con reintento y retorno a Creator
+  Studio; timeout de seguridad: nunca spinner infinito.
+- DEMO_MODE ON/OFF compatible: badge DEMO existente (`DemoBadge`) cuando el
+  canal es demo_* o el modo demo está activo; aviso explícito de que las
+  métricas son de la instancia local/demo, no de producción.
+- Creator Studio conserva su acceso "Analytics" → `/dashboard/analytics`
+  (sin cambios en DashboardPage).
+
 ### Added — ETAPA 7D: Editor básico de video (Creator Studio)
 - Nueva página `src/pages/VideoEditorPage.tsx` en `/dashboard/editor` y
   `/dashboard/editor/:id` (rutas protegidas, mismo Layout; no se rediseñó nada).
