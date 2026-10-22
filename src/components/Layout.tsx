@@ -6,7 +6,7 @@ import { DemoBanner } from './DemoBanner';
 import {
   Home, Compass, Grid3X3, Heart, Library, LayoutDashboard,
   Settings, LogOut, Menu, X, Search, Bell, User, ChevronDown,
-  Shield, Radio, LifeBuoy, Film
+  Shield, Radio, LifeBuoy, Film, UploadCloud
 } from 'lucide-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -30,6 +30,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(user ? [
       { icon: Heart, label: 'Siguiendo', path: '/following' },
       { icon: Library, label: 'Biblioteca', path: '/library' },
+      // ETAPA 7B — acceso visible al upload local (Reel/VOD/Clip → IndexedDB)
+      { icon: UploadCloud, label: 'Subir contenido', path: '/dashboard/upload' },
       { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     ] : []),
     { icon: LifeBuoy, label: 'Centro de Soporte', path: '/support' },

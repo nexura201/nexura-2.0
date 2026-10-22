@@ -64,6 +64,8 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { SettingsPage } from './pages/Settings';
 import { AdminPage } from './pages/AdminOwner';
 import { ExplorePage, FollowingPage, CategoriesPage, LibraryPage } from './pages/NavigationPages';
+import { UploadPage } from './pages/UploadPage';
+import { runSafeMediaCleanup } from './services/content';
 import { SearchPage } from './pages/SearchPage';
 import { CategoryPage } from './pages/CategoryPage';
 import { VideoPage } from './pages/VideoPage';
@@ -161,6 +163,11 @@ function AppRoutes() {
   // Etapa 5: sembrar el universo demo (idempotente, solo si DEMO_MODE activo).
   useEffect(() => {
     seedDemoData();
+    // ETAPA 7A/7B — limpieza SEGURA de blobs huérfanos en IndexedDB.
+    // Se ejecuta DESPUÉS del seed para que las storageKeys demo ya existan en
+    // las colecciones (lista blanca conservadora: nunca se borra contenido
+    // vivo ni claves dudosas; ver content.runSafeMediaCleanup). Best-effort.
+    void runSafeMediaCleanup();
   }, []);
 
   return (
@@ -198,6 +205,8 @@ function AppRoutes() {
       {/* Rutas protegidas */}
       <Route path="/dashboard" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard/stream" element={<ProtectedRoute><Layout><StreamConfigPage /></Layout></ProtectedRoute>} />
+      {/* ETAPA 7B — Subida local de contenido (Reel/VOD/Clip) a IndexedDB */}
+      <Route path="/dashboard/upload" element={<ProtectedRoute><Layout><UploadPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard/analytics" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
       {/* Alias de contenido existente: Mis Videos / Mis Clips (los enlaces internos ya apuntan aquí) */}
       <Route path="/dashboard/videos" element={<ProtectedRoute><Layout><LibraryPage /></Layout></ProtectedRoute>} />

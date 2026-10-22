@@ -217,6 +217,59 @@ export function getAllVideos(): Video[] {
 }
 
 /**
+ * ETAPA 7B — Crear un VOD por SUBIDA LOCAL de un archivo del usuario.
+ *
+ * Patrón idéntico al resto del servicio (colección `nexura_videos`, misma
+ * forma que createVideoFromStream), PERO sin simulación de FFmpeg ni
+ * storageService/URLs externas: el binario vive en IndexedDB bajo la
+ * `storageKey` provista (mediaLocal.ts) y `videoUrl` queda '' — los
+ * reproductores resuelven el medio desde IndexedDB cuando videoUrl está
+ * vacío (useLocalMediaUrl). Sin arquitectura paralela de contenido.
+ *
+ * [FUTURO BACKEND] POST /api/videos { upload } → presigned URL + worker.
+ */
+export async function createVideoFromLocalUpload(params: {
+  channelId: string;
+  userId: string;
+  title: string;
+  description: string;
+  visibility: VideoVisibility;
+  duration: number;
+  storageKey: string;
+}): Promise<Video> {
+  const channel = db.getAllChannels().find(c => c.id === params.channelId);
+  if (!channel) throw new Error('CHANNEL_NOT_FOUND');
+
+  const nowIso = new Date().toISOString();
+  const video: Video = {
+    id: uuidv4(),
+    channelId: params.channelId,
+    streamId: null,
+    title: params.title,
+    description: params.description,
+    status: 'READY', // el archivo ya está íntegro en IndexedDB: no hay transcode pendiente
+    visibility: params.visibility,
+    duration: params.duration,
+    thumbnailUrl: '',
+    videoUrl: '', // medio real: blob local bajo storageKey (sin URLs externas)
+    storageKey: params.storageKey,
+    views: 0,
+    processingStartedAt: nowIso,
+    processingCompletedAt: nowIso,
+    publishedAt: params.visibility === 'PUBLIC' ? nowIso : null,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+
+  const videos = getCollection<Video>(VIDEO_KEYS.videos);
+  videos.push(video);
+  setCollection(VIDEO_KEYS.videos, videos);
+
+  db.createAuditLog(params.userId, 'VOD_UPLOADED_LOCAL', 'video', video.id, `Subida local (${params.storageKey})`);
+  return video;
+}
+
+/**
  * Etapa 6 — Biblioteca del creador: TODOS los VODs propios (incluye
  * PROCESSING/PRIVATE/borradores), excluyendo los eliminados. La visibilidad
  * ampliada es solo para el autor del canal (la vista pública sigue usando

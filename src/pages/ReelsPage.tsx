@@ -9,6 +9,7 @@ import type { Reel, Channel, User } from '../types';
 import { isDemoMode } from '../config/demoMode';
 import { DEMO_USERNAME_PREFIX } from '../services/demoData';
 import { DemoBadge } from '../components/DemoBadge';
+import { useLocalMediaUrl } from '../hooks/useLocalMediaUrl';
 import {
   Play, Pause, Volume2, VolumeX, Heart, Share2, Eye,
   ChevronUp, ChevronDown, Loader2, Film
@@ -58,8 +59,12 @@ function ReelCard({
   // placeholder honesto y el spinner desaparece (nunca loading infinito).
   const [mediaError, setMediaError] = useState(false);
 
-  // Sin videoUrl no se intenta cargar nada; con mediaError la carga falló.
-  const hasMedia = !!reel.videoUrl && !mediaError;
+  // ETAPA 7B: sin videoUrl pero con storageKey → blob local (IndexedDB).
+  // Los reels DEMO nunca tienen blob local, así que mantienen su placeholder.
+  const localMedia = useLocalMediaUrl(reel.videoUrl, reel.storageKey);
+  const playSrc = reel.videoUrl || localMedia.url || '';
+  // Sin medio (URL ni blob) no se intenta cargar nada; con mediaError la carga falló.
+  const hasMedia = !!playSrc && !mediaError;
 
   const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
     videoRef.current = el;
@@ -116,7 +121,8 @@ function ReelCard({
       {hasMedia ? (
         <video
           ref={setVideoRef}
-          src={reel.videoUrl}
+          key={`${reel.id}-${localMedia.url ?? 'url'}`}
+          src={playSrc}
           poster={reel.thumbnailUrl || undefined}
           className="h-full w-auto max-w-full object-contain aspect-[9/16]"
           style={{ aspectRatio: '9 / 16' }}
