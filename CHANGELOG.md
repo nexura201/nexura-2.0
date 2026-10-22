@@ -7,6 +7,30 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Added — ETAPA 7E-3: Calendario de Lives / Programación (Creator Studio)
+- Nuevo servicio local `src/services/schedule.service.ts` (patrón `nexura_*`,
+  localStorage; sin backend/Supabase/Firebase). Modelo mínimo: título,
+  descripción, categoría, fecha/hora locales ("YYYY-MM-DD" + "HH:mm"),
+  estado PROGRAMADO/CANCELADO. Composición de fechas SIEMPRE con
+  `new Date(y, m-1, d, h, min)` (evita el shift UTC de `new Date("YYYY-MM-DD")`).
+- Nueva página `src/pages/SchedulePage.tsx` en la ruta `/dashboard/schedule`
+  (no existía previamente ninguna arquitectura de calendario reutilizable):
+  crear/editar/cancelar/eliminar (con confirmación), vista próximos vs
+  cancelados/pasados, validaciones (título requerido, fecha/hora válidas,
+  fechas futuras al crear), loading/vacío/error recuperable con reintento y
+  vuelta a Creator Studio. Responsive.
+- DEMO_MODE: con demo ON siembra idempotente de 2 lives demo razonables
+  (ids estables `demo_live_<channelId>`, sin duplicados al recargar) y botón
+  "Reiniciar demo" que purga SOLO programaciones demo del usuario demo
+  (nunca toca programaciones creadas por el usuario real). Con demo OFF,
+  únicamente datos locales reales del creador o estado vacío honesto.
+- Integración NOTIFICACIONES (solo existente, idempotente): eventos locales
+  "Live programado / actualizado / cancelado" vía
+  `NotificationService.createLocalEventNotification` (dedupe 24 h, best-effort,
+  nunca rompe el flujo). Sin push/email real — lenguaje honesto en la UI.
+- Creator Studio: acceso "Calendario" → `/dashboard/schedule` en Accesos del
+  Creator Studio (App.tsx agrega solo esa ruta protegida; nada más tocado).
+
 ### Added — ETAPA 7E-1: Analytics del Creator Studio
 - Nueva página `src/pages/AnalyticsPage.tsx` en la ruta EXISTENTE
   `/dashboard/analytics` (antes apuntaba a DashboardPage; ahora tiene página
