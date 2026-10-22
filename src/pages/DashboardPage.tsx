@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { AnalyticsService } from '../services/analytics.service';
 import { ActivityService } from '../services/activity.service';
+import { NotificationService, onNotificationsChanged } from '../services/notification.service';
 import * as contentService from '../services/content';
 import type { UnifiedContentItem, ContentKind } from '../services/content';
 import { isDemoMode } from '../config/demoMode';
@@ -42,6 +43,8 @@ export function DashboardPage() {
   const [contentItems, setContentItems] = useState<UnifiedContentItem[]>([]);
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const [channelCategory, setChannelCategory] = useState<string | null>(null);
+  // ETAPA 7E-2: contador real de no leídas (servicio existente; metadatos locales).
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(() => {
@@ -68,12 +71,31 @@ export function DashboardPage() {
     const cat = channel.categoryId ? categoryService.getCategoryById(channel.categoryId) : null;
     setChannelCategory(cat?.name ?? null);
 
+    // Notificaciones no leídas (NotificationService existente, sin lectura CRUD directa)
+    try {
+      setUnreadNotifications(NotificationService.getUnreadCount(user.id));
+    } catch {
+      setUnreadNotifications(0);
+    }
+
     setLoading(false);
   }, [user]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // ETAPA 7E-2: el contador de no leídas se refresca cuando cambia la lista local.
+  useEffect(() => {
+    if (!user) return;
+    return onNotificationsChanged(() => {
+      try {
+        setUnreadNotifications(NotificationService.getUnreadCount(user.id));
+      } catch {
+        setUnreadNotifications(0);
+      }
+    });
+  }, [user]);
 
   if (loading) {
     return (
@@ -264,7 +286,7 @@ export function DashboardPage() {
           <AccessLink to="/library" icon={Library} label="Biblioteca" />
           <AccessLink to="/dashboard/stream" icon={Radio} label="Configuración de stream" />
           <AccessLink to="/dashboard/analytics" icon={BarChart3} label="Analytics" />
-          <AccessLink to="/notifications" icon={Bell} label="Notificaciones" />
+          <AccessLink to="/notifications" icon={Bell} label="Notificaciones" badgeCount={unreadNotifications} />
           <AccessLink to="/settings" icon={Settings2} label="Configuración" />
         </div>
         <p className="text-xs text-text-muted mt-2">
@@ -355,12 +377,17 @@ function QuickAction({ to, icon: Icon, iconColor, title, hint }: {
   );
 }
 
-function AccessLink({ to, icon: Icon, label }: { to: string; icon: any; label: string }) {
+function AccessLink({ to, icon: Icon, label, badgeCount }: { to: string; icon: any; label: string; badgeCount?: number }) {
   return (
     <Link
       to={to}
-      className="flex flex-col items-center gap-2 bg-bg-card border border-border rounded-xl px-3 py-4 text-center hover:border-primary/30 hover:text-white text-text-secondary transition-colors"
+      className="relative flex flex-col items-center gap-2 bg-bg-card border border-border rounded-xl px-3 py-4 text-center hover:border-primary/30 hover:text-white text-text-secondary transition-colors"
     >
+      {typeof badgeCount === 'number' && badgeCount > 0 && (
+        <span className="absolute top-2 right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">
+          {badgeCount > 99 ? '99+' : badgeCount}
+        </span>
+      )}
       <Icon className="w-5 h-5 text-primary-light" />
       <span className="text-xs font-medium leading-tight">{label}</span>
     </Link>

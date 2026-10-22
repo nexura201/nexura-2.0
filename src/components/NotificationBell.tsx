@@ -1,13 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell } from 'lucide-react';
-import { NotificationService } from '../services/notification.service';
+import { NotificationService, onNotificationsChanged } from '../services/notification.service';
 import { useAuth } from '../context/AuthContext';
 
 export function NotificationBell() {
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
+
+  // ETAPA 7E-2: el contador se actualiza ante cualquier cambio real de
+  // notificaciones (evento local del servicio) además del polling existente.
+  useEffect(() => {
+    if (!user) return;
+    const refresh = () => setUnreadCount(NotificationService.getUnreadCount(user.id));
+    refresh();
+    const unsubscribe = onNotificationsChanged(refresh);
+    return unsubscribe;
+  }, [user]);
 
   useEffect(() => {
     if (user) {
