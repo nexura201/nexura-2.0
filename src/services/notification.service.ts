@@ -4,6 +4,28 @@ import type { Notification, NotificationType, NotificationPreferences } from '..
 const NOTIFICATIONS_KEY = 'nexura_notifications';
 const NOTIFICATION_PREFS_KEY = 'nexura_notification_prefs';
 
+/**
+ * ETAPA 7E-2 — Canal de eventos para la UI (campana del header, página de
+ * Notificaciones). Es solo un pub/sub en memoria: los DATOS persisten en la
+ * capa local existente (localStorage vía este servicio). No implica entrega
+ * push ni sincronización entre dispositivos.
+ */
+type NotificationsChangedListener = () => void;
+const changedListeners = new Set<NotificationsChangedListener>();
+
+export function onNotificationsChanged(listener: NotificationsChangedListener): () => void {
+  changedListeners.add(listener);
+  return () => { changedListeners.delete(listener); };
+}
+
+function emitNotificationsChanged(): void {
+  // Un error en un listener de UI no debe romper la operación de datos.
+  changedListeners.forEach(l => { try { l(); } catch { /* ignore */ } });
+}
+
+/** Clave estable para notificaciones generadas por el sistema local (evita duplicados). */
+const DEDUPE_TTL_MS = 24 * 60 * 60 * 1000; // 24 h
+
 export class NotificationService {
   // Crear una nueva notificación
   static createNotification(
@@ -28,8 +50,52 @@ export class NotificationService {
 
     notifications.unshift(notification);
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+    emitNotificationsChanged();
 
     return notification;
+  }
+
+  /**
+   * Versión idempotente para eventos del sistema local (upload, edición, etc.).
+   * Si ya existe una notificación sin leer con la misma `dedupeKey` en las
+   * últimas 24 h, NO se duplica: se actualiza su contenido y marca de demo.
+   */
+  static createLocalEventNotification(params: {
+    userId: string;
+    type: NotificationType;
+    title: string;
+    body: string;
+    dedupeKey: string;
+    data?: Record<string, unknown>;
+  }): Notification | null {
+    try {
+      const notifications = this.getNotifications();
+      const now = Date.now();
+      const existing = notifications.find(n =>
+        n.userId === params.userId &&
+        !n.read &&
+        n.data?.dedupeKey === params.dedupeKey &&
+        now - new Date(n.createdAt).getTime() < DEDUPE_TTL_MS
+      );
+
+      if (existing) {
+        existing.title = params.title;
+        existing.body = params.body;
+        existing.data = { ...(existing.data ?? {}), ...(params.data ?? {}), dedupeKey: params.dedupeKey };
+        localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+        emitNotificationsChanged();
+        return existing;
+      }
+
+      return this.createNotification(params.userId, params.type, params.title, params.body, {
+        ...(params.data ?? {}),
+        dedupeKey: params.dedupeKey,
+        local: true,
+      });
+    } catch {
+      // Fallo de almacenamiento local: no rompe la operación que lo invoca.
+      return null;
+    }
   }
 
   // Obtener todas las notificaciones de un usuario
@@ -60,6 +126,7 @@ export class NotificationService {
     notifications[index].readAt = new Date().toISOString();
     
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+    emitNotificationsChanged();
     return true;
   }
 
@@ -76,6 +143,7 @@ export class NotificationService {
     });
 
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+    emitNotificationsChanged();
   }
 
   // Eliminar una notificación
@@ -86,6 +154,7 @@ export class NotificationService {
     if (filtered.length === notifications.length) return false;
     
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(filtered));
+    emitNotificationsChanged();
     return true;
   }
 
@@ -94,6 +163,7 @@ export class NotificationService {
     const notifications = this.getNotifications();
     const filtered = notifications.filter(n => n.userId !== userId);
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(filtered));
+    emitNotificationsChanged();
   }
 
   // Notificaciones específicas

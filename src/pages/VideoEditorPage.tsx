@@ -14,6 +14,7 @@ import { useLocalMediaUrl } from '../hooks/useLocalMediaUrl';
 import { hasMedia } from '../services/mediaLocal';
 import { getEditByContent, saveEdit, formatEditTime, parseEditTime } from '../services/videoEdit';
 import type { EditTextPosition } from '../services/videoEdit';
+import { NotificationService } from '../services/notification.service';
 import { ContentStateChip } from '../components/ContentStateChip';
 import { DemoBadge } from '../components/DemoBadge';
 
@@ -337,6 +338,21 @@ export function VideoEditorPage() {
       );
       setSavedAt(cfg.updatedAt);
       addToast('success', 'Edición guardada localmente');
+
+      // ETAPA 7E-2 — Notificación LOCAL del evento real de guardado (idempotente
+      // por contenido; no se duplica en cada guardado). Solo metadatos pequeños.
+      try {
+        if (user) {
+          NotificationService.createLocalEventNotification({
+            userId: user.id,
+            type: 'SYSTEM',
+            title: 'Edición guardada localmente',
+            body: `La edición de "${selectedItem.title}" quedó guardada en este dispositivo (recorte/formato/texto).`,
+            dedupeKey: `edit:${selectedItem.id}`,
+            data: { contentId: selectedItem.id },
+          });
+        }
+      } catch { /* best-effort: no rompe el guardado */ }
     } catch (err: any) {
       const msg = err?.message ?? 'No se pudo guardar la edición.';
       setSaveError(msg);

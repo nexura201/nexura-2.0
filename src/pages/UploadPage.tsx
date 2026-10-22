@@ -16,6 +16,7 @@ import {
   saveMedia, deleteMedia, getMediaBlob, formatBytes, describeMediaError, buildMediaKey,
 } from '../services/mediaLocal';
 import { reelExistsWithKey } from '../services/reel';
+import { NotificationService } from '../services/notification.service';
 import type { ContentKind } from '../services/content';
 
 /**
@@ -313,6 +314,21 @@ export function UploadPage() {
       if (mountedRef.current) {
         setSaveStatus({ kind: 'saved', title: input.title, kindLabel: kind === 'video' ? 'VOD' : kind === 'clip' ? 'Clip' : 'Reel' });
         addToast('success', `${kind === 'video' ? 'VOD' : kind === 'clip' ? 'Clip' : 'Reel'} guardado localmente`);
+
+        // ETAPA 7E-2 — Notificación LOCAL del evento real de subida (idempotente
+        // por contenido; no se duplica en recargas ni repeticiones). Solo metadatos
+        // pequeños en la capa local existente; el blob queda en IndexedDB.
+        try {
+          const kindLabel = kind === 'video' ? 'VOD' : kind === 'clip' ? 'Clip' : 'Reel';
+          NotificationService.createLocalEventNotification({
+            userId: user.id,
+            type: kind === 'clip' ? 'CLIP_READY' : 'VIDEO_READY',
+            title: `${kindLabel} guardado localmente`,
+            body: `"${input.title}" se guardó en este dispositivo. Disponible en tu Biblioteca y Creator Studio.`,
+            dedupeKey: `upload:${createdId}`,
+            data: { contentId: createdId, kind },
+          });
+        } catch { /* la notificación es best-effort: no rompe la subida */ }
       }
     } catch (err: any) {
       // Rollback anti-huérfano: si el blob se guardó pero los metadatos
