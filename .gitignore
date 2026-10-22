@@ -1,1 +1,2 @@
-.qa-fix/
+node_modules/
+dist/

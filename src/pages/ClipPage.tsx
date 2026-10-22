@@ -7,6 +7,7 @@ import * as db from '../services/database';
 import { DEMO_USERNAME_PREFIX } from '../services/demoData';
 import { formatContentDuration, deriveContentState } from '../services/content';
 import { ContentStateChip } from '../components/ContentStateChip';
+import { useLocalMediaUrl } from '../hooks/useLocalMediaUrl';
 import { DemoBadge } from '../components/DemoBadge';
 import type { Clip, User, Channel } from '../types';
 import {
@@ -29,6 +30,8 @@ export function ClipPage() {
   // el <video> dispara onError => se muestra el placeholder honesto en vez
   // de quedar esperando un evento onLoadedData que nunca ocurre.
   const [mediaError, setMediaError] = useState(false);
+  // ETAPA 7B: si videoUrl está vacío y hay storageKey → blob local (IndexedDB).
+  const localMedia = useLocalMediaUrl(clip?.videoUrl, clip?.storageKey);
 
   useEffect(() => {
     if (!id) return;
@@ -130,7 +133,9 @@ export function ClipPage() {
 
   const isOwner = user && (clip.creatorId === user.id || user.role === 'OWNER' || user.role === 'ADMIN');
   // Sin videoUrl no se intenta cargar nada; con mediaError la URL falló => fallback honesto.
-  const hasMedia = !!clip.videoUrl && !mediaError;
+  // ETAPA 7B: el playSrc puede ser la URL almacenada o el blob local de IndexedDB.
+  const playSrc = clip.videoUrl || localMedia.url || '';
+  const hasMedia = !!playSrc && !mediaError;
   const isDemoClip = channelUser?.username.startsWith(DEMO_USERNAME_PREFIX) ?? false;
 
   return (
@@ -139,8 +144,8 @@ export function ClipPage() {
       <div className="aspect-video bg-black rounded-xl mb-6 overflow-hidden relative flex items-center justify-center">
         {hasMedia ? (
           <video
-            key={clip.id}
-            src={clip.videoUrl}
+            key={`${clip.id}-${localMedia.url ?? 'url'}`}
+            src={playSrc}
             poster={clip.thumbnailUrl || undefined}
             controls
             playsInline

@@ -7,6 +7,7 @@ import * as db from '../services/database';
 import { DEMO_USERNAME_PREFIX } from '../services/demoData';
 import { formatContentDuration, deriveContentState } from '../services/content';
 import { ContentStateChip } from '../components/ContentStateChip';
+import { useLocalMediaUrl } from '../hooks/useLocalMediaUrl';
 import { DemoBadge } from '../components/DemoBadge';
 import type { Video, User, Channel } from '../types';
 
@@ -41,6 +42,8 @@ export function VideoPage() {
   // Bug QA Etapa 6: si la URL multimedia almacenada es inválida/heredada,
   // onError conmuta al placeholder honesto (nunca queda esperando eventos).
   const [mediaError, setMediaError] = useState(false);
+  // ETAPA 7B: si videoUrl está vacío y hay storageKey → blob local (IndexedDB).
+  const localMedia = useLocalMediaUrl(video?.videoUrl, video?.storageKey);
   useEffect(() => {
     if (video) { setEditTitle(video.title); setEditDesc(video.description); setEditing(false); }
   }, [video?.id, video?.title, video?.description]);
@@ -147,7 +150,9 @@ export function VideoPage() {
 
   const isOwner = user && (video.channelId === db.getChannelByUserId(user.id)?.id || user.role === 'OWNER' || user.role === 'ADMIN');
   // Sin videoUrl no se intenta cargar nada; con mediaError la URL falló => fallback honesto.
-  const hasMedia = !!video.videoUrl && !mediaError;
+  // ETAPA 7B: el playSrc puede ser la URL almacenada o el blob local de IndexedDB.
+  const playSrc = video.videoUrl || localMedia.url || '';
+  const hasMedia = !!playSrc && !mediaError;
   const isDemoVod = channelUser?.username.startsWith(DEMO_USERNAME_PREFIX) ?? false;
 
   // Edición local (persiste en localStorage vía services/video.updateVideoMetadata)
@@ -170,8 +175,8 @@ export function VideoPage() {
       <div className="aspect-video bg-black rounded-xl mb-6 overflow-hidden relative flex items-center justify-center">
         {hasMedia ? (
           <video
-            key={video.id}
-            src={video.videoUrl}
+            key={`${video.id}-${localMedia.url ?? 'url'}`}
+            src={playSrc}
             poster={video.thumbnailUrl || undefined}
             controls
             playsInline

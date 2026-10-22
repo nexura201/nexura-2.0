@@ -272,6 +272,56 @@ export function setClipVisibility(clipId: string, visibility: 'PUBLIC' | 'PRIVAT
 }
 
 /**
+ * ETAPA 7B — Crear un Clip por SUBIDA LOCAL de un archivo del usuario.
+ * Mismo patrón que createClipFromStream/createClipFromVideo (colección
+ * `nexura_clips`) pero sin stream/video origen, sin FFmpeg simulado y sin
+ * storageService: el binario vive en IndexedDB bajo `storageKey` (mediaLocal)
+ * y `videoUrl` queda '' → ClipPage lo resuelve localmente (useLocalMediaUrl).
+ * [FUTURO BACKEND] POST /api/clips { upload }
+ */
+export async function createClipFromLocalUpload(params: {
+  channelId: string;
+  creatorId: string;
+  title: string;
+  description: string;
+  visibility: 'PUBLIC' | 'PRIVATE';
+  duration: number;
+  storageKey: string;
+}): Promise<Clip> {
+  const channel = db.getAllChannels().find(c => c.id === params.channelId);
+  if (!channel) throw new Error('CHANNEL_NOT_FOUND');
+
+  const nowIso = new Date().toISOString();
+  const clip: Clip = {
+    id: uuidv4(),
+    channelId: params.channelId,
+    videoId: null,
+    streamId: null,
+    creatorId: params.creatorId,
+    title: params.title,
+    description: params.description,
+    startTime: 0,
+    endTime: params.duration,
+    duration: params.duration,
+    status: 'READY', // el archivo ya está íntegro en IndexedDB
+    visibility: params.visibility,
+    thumbnailUrl: '',
+    videoUrl: '', // medio real: blob local bajo storageKey (sin URLs externas)
+    storageKey: params.storageKey,
+    views: 0,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+
+  const clips = getCollection<Clip>(CLIP_KEYS.clips);
+  clips.push(clip);
+  setCollection(CLIP_KEYS.clips, clips);
+
+  db.createAuditLog(params.creatorId, 'CLIP_UPLOADED_LOCAL', 'clip', clip.id, `Subida local (${params.storageKey})`);
+  return clip;
+}
+
+/**
  * Obtener clips de un stream
  */
 export function getStreamClips(streamId: string): Clip[] {

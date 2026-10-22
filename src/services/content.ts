@@ -3,6 +3,7 @@ import * as videoService from './video';
 import * as clipService from './clip';
 import * as reelService from './reel';
 import * as db from './database';
+import { cleanupOrphanMedia } from './mediaLocal';
 
 /**
  * content.ts — Capa unificada del ecosistema de contenido de NEXURA (Etapa 6).
@@ -174,6 +175,50 @@ function baseItem(item: BaseContentSource, kind: ContentKind): UnifiedContentIte
     storageKey: item.storageKey,
     ...info, // incluye channelSlug/creatorUsername/creatorDisplayName/isDemo (única fuente)
   };
+}
+
+/**
+ * ETAPA 7A/7B — Claves de almacenamiento con contenido VIVO que debe
+ * conservarse (lista blanca para la limpieza de blobs huérfanos).
+ * Fuente única: los SERVICIOS EXISTENTES (mismas colecciones localStorage
+ * nexura_videos / nexura_clips / nexura_reels).
+ *
+ * Política conservadora (requisito Etapa 7B): se incluyen TODAS las claves
+ * presentes en las colecciones crudas —incluidos registros DELETED,
+ * PROCESSING, PRIVATE y UNLISTED— porque NO existe todavía una política
+ * explícita de purga. Ante cualquier duda sobre una clave, NO se borra.
+ * Lee crudo con el MISMO helper patrón-proyecto (JSON parse tolerante); no
+ * hay arquitectura paralela: son exactamente las mismas colecciones que leen
+ * video.ts / clip.ts / reel.ts.
+ */
+export function collectLiveStorageKeys(): Set<string> {
+  const keys = new Set<string>();
+  const readRaw = <T extends { storageKey?: string }>(lsKey: string): T[] => {
+    try {
+      return JSON.parse(localStorage.getItem(lsKey) || '[]') as T[];
+    } catch {
+      return [];
+    }
+  };
+  for (const v of readRaw<{ storageKey?: string }>('nexura_videos')) if (v.storageKey) keys.add(v.storageKey);
+  for (const c of readRaw<{ storageKey?: string }>('nexura_clips')) if (c.storageKey) keys.add(c.storageKey);
+  for (const r of readRaw<{ storageKey?: string }>('nexura_reels')) if (r.storageKey) keys.add(r.storageKey);
+  return keys;
+}
+
+/**
+ * Limpieza SEGURA de blobs huérfanos en IndexedDB (mediaLocal).
+ * Solo elimina claves que NO están en collectLiveStorageKeys() y que no son
+ * demo (mediaLocal rechaza prefijos demo por sí mismo). Best-effort:
+ * cualquier fallo se traga silenciosamente — nunca rompe la app.
+ */
+export async function runSafeMediaCleanup(): Promise<string[]> {
+  try {
+    const valid = collectLiveStorageKeys();
+    return await cleanupOrphanMedia(valid);
+  } catch {
+    return [];
+  }
 }
 
 /**

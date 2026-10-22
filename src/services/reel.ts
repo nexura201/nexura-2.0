@@ -98,6 +98,22 @@ export function getReelById(reelId: string): Reel | null {
 }
 
 /**
+ * Etapa 7A/7B — ¿Existe ya algún reel NO eliminado de un canal con esta
+ * storageKey? Fuente única de verdad (localStorage `nexura_reels`), sin
+ * colección paralela. Se usa para evitar duplicados en la subida local:
+ * dos registros que apuntan al mismo blob serían inconsistencia de datos.
+ * [FUTURO BACKEND] SELECT 1 FROM reels WHERE channel_id=$1 AND storage_key=$2
+ *   AND status <> 'DELETED' LIMIT 1
+ */
+export function reelExistsWithKey(channelId: string, storageKey: string): boolean {
+  if (!channelId || !storageKey) return false;
+  const reels = getCollection<Reel>(REEL_KEYS.reels);
+  return reels.some(
+    r => r.channelId === channelId && r.storageKey === storageKey && r.status !== 'DELETED'
+  );
+}
+
+/**
  * Obtener todos los reels listos para mostrar (feed)
  */
 export function getReelsFeed(): Reel[] {
@@ -237,12 +253,43 @@ export function toggleReelLike(reelId: string, userId: string): { liked: boolean
   return { liked: !alreadyLiked, likes: reel.likes };
 }
 
-/**
- * Verificar si un usuario le dio me gusta a un reel
- */
+/** Verificar si un usuario le dio me gusta a un reel */
 export function isReelLikedBy(reelId: string, userId: string): boolean {
   const reel = getReelById(reelId);
   return reel ? reel.likedBy.includes(userId) : false;
+}
+
+/**
+ * ETAPA 7B — Crear un Reel por SUBIDA LOCAL de un archivo del usuario.
+ * Reutiliza createReel (MISMA colección `nexura_reels`, sin modelo paralelo)
+ * y luego aplica los datos de la subida con updateReel. El binario vive en
+ * IndexedDB bajo `storageKey` (mediaLocal.ts); `videoUrl` queda '' → el feed
+ * lo resuelve localmente (useLocalMediaUrl). NO es contenido demo: se ancla
+ * al canal propio del usuario y resetDemoData() solo toca canales demo_*.
+ * [FUTURO BACKEND] POST /api/reels { upload }
+ */
+export async function createReelFromLocalUpload(params: {
+  channelId: string;
+  userId: string;
+  title: string;
+  description: string;
+  visibility: 'public' | 'unlisted' | 'private';
+  duration: number;
+  storageKey: string;
+}): Promise<Reel> {
+  // Anti-duplicado: dos registros que apuntan al mismo blob serían inconsistencia.
+  if (reelExistsWithKey(params.channelId, params.storageKey)) {
+    throw new Error('REEL_DUPLICATE_STORAGE_KEY');
+  }
+  // createReel genera su propio id/status/storageKey; se normalizan después.
+  const created = await createReel(params.channelId, params.title, params.description);
+  const status: Reel['status'] = params.visibility === 'private' ? 'PRIVATE' : 'READY';
+  return updateReel(created.id, {
+    storageKey: params.storageKey,
+    duration: params.duration,
+    status,
+    videoUrl: '', // medio real: blob local bajo storageKey (sin URLs externas)
+  });
 }
 
 // ============ HELPERS (mismo patrón que video.ts) ============

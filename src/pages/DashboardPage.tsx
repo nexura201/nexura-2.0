@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Users, Eye, Clock, Video, Scissors, Radio, TrendingUp,
-  BarChart3, Calendar, Activity
+  BarChart3, Calendar, Activity, UploadCloud
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AnalyticsService } from '../services/analytics.service';
@@ -127,7 +127,17 @@ export function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid md:grid-cols-3 gap-4 mb-8">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* ETAPA 7B — subida local de contenido (Reel/VOD/Clip → IndexedDB) */}
+        <Link
+          to="/dashboard/upload"
+          className="bg-bg-card border border-border rounded-xl p-6 hover:border-primary/30 transition-all group"
+        >
+          <UploadCloud className="w-8 h-8 text-primary-light mb-3 group-hover:scale-110 transition-transform" />
+          <h3 className="text-lg font-semibold text-white mb-1">Subir contenido</h3>
+          <p className="text-sm text-text-muted">Guardá un Reel, VOD o Clip desde tu PC</p>
+        </Link>
+
         <Link
           to="/dashboard/stream"
           className="bg-bg-card border border-border rounded-xl p-6 hover:border-primary/30 transition-all group"
