@@ -209,6 +209,16 @@ export function DashboardPage() {
             hint="Fragmento corto"
           />
         </div>
+        {/* ETAPA 7D — Editor básico de video (acceso desde Crear contenido) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+          <QuickAction
+            to="/dashboard/editor"
+            icon={Clapperboard}
+            iconColor="text-primary-light"
+            title="Editor de video"
+            hint="Recorte, texto y formato"
+          />
+        </div>
       </section>
 
       {/* ===== Contenido reciente (capa unificada content.ts) ===== */}
@@ -248,8 +258,9 @@ export function DashboardPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-3">
           Accesos del Creator Studio
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
           <AccessLink to="/dashboard/upload" icon={UploadCloud} label="Crear contenido" />
+          <AccessLink to="/dashboard/editor" icon={Clapperboard} label="Editor de video" />
           <AccessLink to="/library" icon={Library} label="Biblioteca" />
           <AccessLink to="/dashboard/stream" icon={Radio} label="Configuración de stream" />
           <AccessLink to="/dashboard/analytics" icon={BarChart3} label="Analytics" />
