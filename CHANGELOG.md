@@ -7,6 +7,24 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Added — ETAPA 7C: Creator Studio
+- `/dashboard` convertido en **Creator Studio**: saludo del creador, estado general
+  del canal (seguidores / visualizaciones / horas transmitidas / contenidos reales),
+  LIVE/OFFLINE solo cuando la arquitectura lo provee, y resumen de actividad.
+- Sección **"Crear contenido"** con accesos rápidos: Subir contenido
+  (`/dashboard/upload`), Crear Reel (`?type=reel`), Subir video/VOD (`?type=vod`),
+  Crear Clip (`?type=clip`) — reutiliza el uploader de la Etapa 7A/7B sin duplicarlo.
+- `UploadPage` lee el parámetro `?type=` y pre-selecciona el tipo de contenido.
+- Sección **"Contenido reciente"** (últimos 6) obtenida vía `services/content.ts`
+  (capa unificada de Etapa 6): título, tipo (Reel/VOD/Clip), estado unificado,
+  fecha y visibilidad. Incluye lo creado por upload en 7A/7B.
+- Accesos del Creator Studio a rutas **existentes**: Biblioteca (`/library`),
+  Configuración de stream (`/dashboard/stream`), Analytics (`/dashboard/analytics`),
+  Notificaciones (`/notifications`), Configuración (`/settings`).
+  Calendario/programación NO se muestra como acceso (sin ruta propia de creador aún).
+- Sin métricas financieras falsas; funciona con DEMO_MODE ON y OFF (badge DEMO
+  solo en datos demo_*).
+
 ### Added
 - Sistema de recomendaciones avanzado con machine learning
 - Integración con múltiples proveedores de pago

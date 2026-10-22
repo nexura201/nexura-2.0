@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import {
   UploadCloud, Film, Video as VideoIcon, Scissors, Loader2,
@@ -161,15 +161,30 @@ function finalizeContentMetadata(input: UploadData, createdId: string): void {
 
 // ============ COMPONENTE ============
 
+/**
+ * ETAPA 7C — `?type=` pre-selecciona el tipo de contenido desde Creator Studio:
+ *   /dashboard/upload?type=reel | vod | clip
+ * Sin el parámetro (o con un valor desconocido) se mantiene el default 'reel'.
+ */
+const UPLOAD_TYPE_PARAM: Record<string, ContentKind> = {
+  reel: 'reel',
+  vod: 'video',
+  video: 'video',
+  clip: 'clip',
+};
+
 export function UploadPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [fileState, setFileState] = useState<FileState>({ kind: 'empty' });
   const [previewOk, setPreviewOk] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
-  const [kind, setKind] = useState<ContentKind>('reel');
+  const [kind, setKind] = useState<ContentKind>(
+    () => UPLOAD_TYPE_PARAM[(searchParams.get('type') || '').toLowerCase()] ?? 'reel'
+  );
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
