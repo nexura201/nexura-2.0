@@ -67,6 +67,7 @@ import { ExplorePage, FollowingPage, CategoriesPage, LibraryPage } from './pages
 import { UploadPage } from './pages/UploadPage';
 // ETAPA 7D — Editor básico de video (Creator Studio)
 import { VideoEditorPage } from './pages/VideoEditorPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 import { runSafeMediaCleanup } from './services/content';
 import { SearchPage } from './pages/SearchPage';
 import { CategoryPage } from './pages/CategoryPage';
@@ -212,7 +213,8 @@ function AppRoutes() {
       {/* ETAPA 7D — Editor básico de video sobre contenido local (IndexedDB) */}
       <Route path="/dashboard/editor" element={<ProtectedRoute><Layout><VideoEditorPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard/editor/:id" element={<ProtectedRoute><Layout><VideoEditorPage /></Layout></ProtectedRoute>} />
-      <Route path="/dashboard/analytics" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
+      {/* ETAPA 7E-1 — Analytics del Creator Studio (página propia en la ruta existente) */}
+      <Route path="/dashboard/analytics" element={<ProtectedRoute><Layout><AnalyticsPage /></Layout></ProtectedRoute>} />
       {/* Alias de contenido existente: Mis Videos / Mis Clips (los enlaces internos ya apuntan aquí) */}
       <Route path="/dashboard/videos" element={<ProtectedRoute><Layout><LibraryPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard/clips" element={<ProtectedRoute><Layout><LibraryPage /></Layout></ProtectedRoute>} />
