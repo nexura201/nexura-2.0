@@ -38,12 +38,16 @@ export function VideoPage() {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
+  // Bug QA Etapa 6: si la URL multimedia almacenada es inválida/heredada,
+  // onError conmuta al placeholder honesto (nunca queda esperando eventos).
+  const [mediaError, setMediaError] = useState(false);
   useEffect(() => {
     if (video) { setEditTitle(video.title); setEditDesc(video.description); setEditing(false); }
   }, [video?.id, video?.title, video?.description]);
 
   useEffect(() => {
-    if (id) {
+    if (!id) return;
+    try {
       const v = videoService.getVideoById(id);
       // Owner/admin puede ver su propio contenido PRIVATE/UNLISTED por enlace.
       const ownerChannelId = user ? db.getChannelByUserId(user.id)?.id : undefined;
@@ -51,23 +55,26 @@ export function VideoPage() {
       const publiclyVisible = !!v && (v.visibility === 'PUBLIC' || isDemoPublicVod(v) || isOwnerOfLoaded);
       if (v && v.status === 'READY' && publiclyVisible) {
         setVideo(v);
-        
+        setMediaError(false);
+
         // Get channel info
         const ch = db.getAllChannels().find(c => c.id === v.channelId);
         if (ch) {
           setChannel(ch);
           const chUser = db.getUserById(ch.userId);
           setChannelUser(chUser);
-          
+
           // Check if following
           if (user) {
             setIsFollowing(db.isFollowing(user.id, ch.userId));
           }
         }
-        
+
         // Increment views
         videoService.incrementVideoViews(id);
       }
+    } finally {
+      // Nunca dejar loading infinito, ni siquiera ante excepciones.
       setLoading(false);
     }
   }, [id, user]);
@@ -139,7 +146,8 @@ export function VideoPage() {
   }
 
   const isOwner = user && (video.channelId === db.getChannelByUserId(user.id)?.id || user.role === 'OWNER' || user.role === 'ADMIN');
-  const hasMedia = !!video.videoUrl;
+  // Sin videoUrl no se intenta cargar nada; con mediaError la URL falló => fallback honesto.
+  const hasMedia = !!video.videoUrl && !mediaError;
   const isDemoVod = channelUser?.username.startsWith(DEMO_USERNAME_PREFIX) ?? false;
 
   // Edición local (persiste en localStorage vía services/video.updateVideoMetadata)
@@ -168,6 +176,7 @@ export function VideoPage() {
             controls
             playsInline
             preload="metadata"
+            onError={() => setMediaError(true)}
             className="h-full w-full object-contain"
           />
         ) : (

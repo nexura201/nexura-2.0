@@ -1,12 +1,1 @@
-# Dependencies
-node_modules/
-
-# Build artifacts
-dist/
-
-# Environment files (never commit secrets or local config)
-.env
-.env.local
-.env.*.local
-
-*.patch
+.qa-fix/

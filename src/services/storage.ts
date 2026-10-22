@@ -55,7 +55,12 @@ class LocalStorageProvider implements StorageProvider {
   }
 
   async delete(key: string): Promise<boolean> {
-    await this.removeFromIndexedDB(key);
+    // Bug QA Etapa 6: si IndexedDB no está disponible (navegadores en modo
+    // privado/bloqueado o entornos sin IDB), el borrado de METADATOS (que vive
+    // en localStorage) no debe romperse: la limpieza de archivos es best-effort.
+    try {
+      await this.removeFromIndexedDB(key);
+    } catch { /* noop */ }
     return true;
   }
 
@@ -70,6 +75,7 @@ class LocalStorageProvider implements StorageProvider {
   }
 
   private async storeInIndexedDB(key: string, data: string): Promise<void> {
+    if (typeof indexedDB === 'undefined') return;
     return new Promise((resolve, reject) => {
       const request = indexedDB.open('nexura_storage', 1);
       
@@ -109,6 +115,7 @@ class LocalStorageProvider implements StorageProvider {
   }
 
   private async getFromIndexedDB(key: string): Promise<string | null> {
+    if (typeof indexedDB === 'undefined') return null;
     return new Promise((resolve, reject) => {
       const request = indexedDB.open('nexura_storage', 2);
       
@@ -139,6 +146,7 @@ class LocalStorageProvider implements StorageProvider {
   }
 
   private async removeFromIndexedDB(key: string): Promise<void> {
+    if (typeof indexedDB === 'undefined') return;
     return new Promise((resolve, reject) => {
       const request = indexedDB.open('nexura_storage', 2);
       

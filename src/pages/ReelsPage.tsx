@@ -54,8 +54,12 @@ function ReelCard({
   const [hasStarted, setHasStarted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [showInfo, setShowInfo] = useState(false);
+  // Bug QA Etapa 6: una URL heredada/inválida dispara onError => se conmuta al
+  // placeholder honesto y el spinner desaparece (nunca loading infinito).
+  const [mediaError, setMediaError] = useState(false);
 
-  const hasMedia = !!reel.videoUrl;
+  // Sin videoUrl no se intenta cargar nada; con mediaError la carga falló.
+  const hasMedia = !!reel.videoUrl && !mediaError;
 
   const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
     videoRef.current = el;
@@ -122,6 +126,7 @@ function ReelCard({
           preload="metadata"
           onClick={togglePlay}
           onLoadedData={() => { setIsLoading(false); setHasStarted(true); }}
+          onError={() => { setMediaError(true); setIsLoading(false); }}
           onTimeUpdate={(e) => {
             const v = e.currentTarget;
             if (v.duration > 0) setProgress((v.currentTime / v.duration) * 100);
